@@ -14,10 +14,16 @@ PORTFOLIOS_FILE = os.path.join(path, 'portfolios.json')
 # --- Portföy Kaydetme/Yükleme Fonksiyonları ---
 def load_portfolios():
     if not os.path.exists(PORTFOLIOS_FILE):
+        with open(PORTFOLIOS_FILE, 'w', encoding='utf-8') as f:
+            json.dump([], f)
         return {}
     try:
         with open(PORTFOLIOS_FILE, 'r', encoding='utf-8') as f:
-            portfolios_list = json.load(f)
+            # Dosya boşsa hata vermemesi için kontrol
+            content = f.read()
+            if not content:
+                return {}
+            portfolios_list = json.loads(content)
             return {p['name']: p for p in portfolios_list}
     except (json.JSONDecodeError, FileNotFoundError):
         return {}
@@ -71,7 +77,6 @@ def delete_portfolio(portfolio_name):
 
 @app.route('/calculate', methods=['POST'])
 def calculate():
-    # Bu fonksiyon önceki haliyle aynı, değişiklik yok.
     data = request.get_json()
     stocks = data.get('stocks', [])
     funds = data.get('funds', [])
@@ -79,7 +84,7 @@ def calculate():
         return jsonify({'error': 'Hesaplanacak veri gönderilmedi.'}), 400
     total_portfolio_change = 0.0
     asset_details = []
-    # Hisse Senedi Hesaplama...
+    
     for stock in stocks:
         ticker = stock.get('ticker').strip().upper()
         weight = float(stock.get('weight', 0))
@@ -97,7 +102,7 @@ def calculate():
             total_portfolio_change += weighted_change
             asset_details.append({ 'type': 'stock', 'ticker': ticker, 'daily_change': round(daily_change_percent, 2), 'weighted_impact': round(weighted_change, 2) })
         except Exception: return jsonify({'error': f'"{ticker}" hisse kodu için Yahoo Finance verisi alınamadı.'}), 400
-    # Yatırım Fonu Hesaplama...
+    
     today = date.today()
     start_date = today - timedelta(days=15)
     sdt = start_date.strftime('%d-%m-%Y')
