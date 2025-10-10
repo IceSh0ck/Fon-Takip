@@ -5,6 +5,11 @@ import yfinance as yf
 import requests
 from datetime import date, timedelta
 
+# app.py dosyasının bulunduğu dizinin tam yolunu al
+path = os.path.dirname(os.path.abspath(__file__))
+# portfolios.json için tam yolu oluştur. Bu artık her ortamda çalışır.
+PORTFOLIOS_FILE = os.path.join(path, 'portfolios.json')
+
 app = Flask(__name__)
 
 PORTFOLIOS_FILE = 'portfolios.json'
@@ -126,4 +131,5 @@ def calculate():
     return jsonify({ 'total_change': round(total_portfolio_change, 2), 'details': asset_details })
 
 if __name__ == '__main__':
+
     app.run(debug=True)
