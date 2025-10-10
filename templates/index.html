@@ -17,20 +17,20 @@
         input[type="text"], input[type="number"] { width: calc(100% - 22px); padding: 10px; border: 1px solid #ccc; border-radius: 4px; }
         button { background-color: #3498db; color: white; padding: 12px 20px; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; transition: background-color 0.3s; }
         button:hover { background-color: #2980b9; }
+        button:disabled { background-color: #bdc3c7; cursor: not-allowed; }
         .btn-add { background-color: #2ecc71; padding: 8px 15px; font-size: 14px; margin-top:10px; }
         .btn-save { background-color: #1abc9c; } .btn-save:hover { background-color: #16a085; }
+        .btn-delete { background-color: #e74c3c; width: 100%; margin-top: 15px;} .btn-delete:hover { background-color: #c0392b; }
+        #portfolio-list { list-style-type: none; padding: 0; }
+        #portfolio-list li { padding: 10px; cursor: pointer; border-bottom: 1px solid #eee; transition: background-color 0.2s; }
+        #portfolio-list li:hover { background-color: #f9f9f9; }
+        #portfolio-list li.selected { background-color: #3498db; color: white; font-weight: bold;}
         .positive { color: #27ae60; } .negative { color: #c0392b; }
         .detail-table { width: 100%; margin-top: 10px; border-collapse: collapse; }
         .detail-table th, .detail-table td { padding: 8px; border: 1px solid #ddd; text-align: left; }
         .detail-table th { background-color: #bdc3c7; }
         .loader { border: 4px solid #f3f3f3; border-top: 4px solid #3498db; border-radius: 50%; width: 30px; height: 30px; animation: spin 1s linear infinite; margin: 20px auto; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-        #portfolio-list { list-style-type: none; padding: 0; }
-        .portfolio-item { display: flex; justify-content: space-between; align-items: center; padding: 10px; border-bottom: 1px solid #eee; }
-        .portfolio-item span { cursor: pointer; flex-grow: 1; }
-        .portfolio-item span:hover { color: #3498db; }
-        .btn-delete { background-color: #e74c3c; color: white; border: none; border-radius: 4px; cursor: pointer; padding: 2px 8px; font-size: 12px; line-height: 1.5; }
-        .btn-delete:hover { background-color: #c0392b; }
     </style>
 </head>
 <body>
@@ -38,18 +38,19 @@
     <div class="sidebar">
         <h2>Kaydedilmiş Portföyler</h2>
         <ul id="portfolio-list"></ul>
+        <button id="delete-portfolio-button" class="btn-delete" disabled>Seçili Portföyü Sil</button>
     </div>
     <div class="content">
         <div class="container" id="form-container">
-            <form id="portfolio-form" onsubmit="calculatePortfolio(event)">
+            <form id="portfolio-form">
                 <div class="form-group"><label for="fund-name">Portföy Adı</label><input type="text" id="fund-name" placeholder="Örn: Büyüme Portföyüm" required></div>
                 <h3>Hisse Senetleri</h3><div id="stocks-container"></div>
-                <button type="button" class="btn-add" onclick="addAsset('stock')">Yeni Hisse Ekle</button>
+                <button type="button" id="add-stock-button" class="btn-add">Yeni Hisse Ekle</button>
                 <h3>Yatırım Fonları</h3><div id="funds-container"></div>
-                <button type="button" class="btn-add" onclick="addAsset('fund')">Yeni Fon Ekle</button>
+                <button type="button" id="add-fund-button" class="btn-add">Yeni Fon Ekle</button>
                 <hr style="margin: 20px 0;">
                 <button type="submit">Hesapla</button>
-                <button type="button" class="btn-save" id="save-button" onclick="savePortfolio()">Kaydet</button>
+                <button type="button" class="btn-save" id="save-button">Kaydet</button>
             </form>
         </div>
         <div class="container" id="result-area" style="display: none; text-align:center;">
@@ -70,8 +71,24 @@
 </div>
 
 <script>
-    document.addEventListener('DOMContentLoaded', () => { loadPortfolios(); });
+    let selectedPortfolio = null;
 
+    // --- TÜM BUTONLARIN OLAY DİNLEYİCİLERİ ---
+    document.addEventListener('DOMContentLoaded', () => {
+        loadPortfolios();
+        
+        document.getElementById('add-stock-button').addEventListener('click', () => addAsset('stock'));
+        document.getElementById('add-fund-button').addEventListener('click', () => addAsset('fund'));
+        document.getElementById('save-button').addEventListener('click', savePortfolio);
+        document.getElementById('portfolio-form').addEventListener('submit', calculatePortfolio);
+        document.getElementById('delete-portfolio-button').addEventListener('click', () => {
+            if (selectedPortfolio) {
+                deletePortfolio(selectedPortfolio);
+            }
+        });
+    });
+
+    // --- ARAYÜZ FONKSİYONLARI ---
     function addAsset(type, ticker = '', weight = '', adet = '') {
         const container = document.getElementById(type === 'stock' ? 'stocks-container' : 'funds-container');
         const newRow = document.createElement('div');
@@ -85,6 +102,16 @@
         container.appendChild(newRow);
     }
 
+    function updateDeleteButtonState() {
+        const deleteBtn = document.getElementById('delete-portfolio-button');
+        if (selectedPortfolio) {
+            deleteBtn.disabled = false;
+        } else {
+            deleteBtn.disabled = true;
+        }
+    }
+
+    // --- API İLE İLETİŞİM KURAN FONKSİYONLAR ---
     async function loadPortfolios() {
         const response = await fetch('/get_portfolios');
         const portfolioNames = await response.json();
@@ -92,32 +119,132 @@
         listElement.innerHTML = '';
         portfolioNames.forEach(name => {
             const li = document.createElement('li');
-            li.className = 'portfolio-item';
-            const nameSpan = document.createElement('span');
-            nameSpan.textContent = name;
-            nameSpan.onclick = () => loadPortfolioDetails(name);
-            const deleteBtn = document.createElement('button');
-            deleteBtn.textContent = 'X';
-            deleteBtn.className = 'btn-delete';
-            deleteBtn.onclick = () => deletePortfolio(name);
-            li.appendChild(nameSpan);
-            li.appendChild(deleteBtn);
+            li.textContent = name;
+            li.dataset.name = name; // Veri saklamak için
+            li.addEventListener('click', () => {
+                // Seçimi yönet
+                document.querySelectorAll('#portfolio-list li').forEach(item => item.classList.remove('selected'));
+                li.classList.add('selected');
+                selectedPortfolio = name;
+                updateDeleteButtonState();
+                
+                // Portföyü yükle
+                loadPortfolioDetails(name);
+            });
             listElement.appendChild(li);
         });
+        selectedPortfolio = null;
+        updateDeleteButtonState();
     }
 
     async function loadPortfolioDetails(name) {
         const response = await fetch(`/get_portfolio/${name}`);
         const portfolio = await response.json();
         document.getElementById('fund-name').value = portfolio.name;
+        
         const stocksContainer = document.getElementById('stocks-container');
         stocksContainer.innerHTML = '';
         (portfolio.stocks || []).forEach(s => addAsset('stock', s.ticker, s.weight, s.adet));
+        
         const fundsContainer = document.getElementById('funds-container');
         fundsContainer.innerHTML = '';
         (portfolio.funds || []).forEach(f => addAsset('fund', f.ticker, f.weight, f.adet));
+
         document.getElementById('result-area').style.display = 'none';
     }
 
     async function deletePortfolio(name) {
-        if (confirm(`'${name
+        if (confirm(`'${name}' portföyünü kalıcı olarak silmek istediğinizden emin misiniz?`)) {
+            const response = await fetch(`/delete_portfolio/${name}`, { method: 'DELETE' });
+            const result = await response.json();
+            alert(response.ok ? result.success : 'Hata: ' + result.error);
+            if (response.ok) {
+                // Formu temizle ve listeyi yenile
+                document.getElementById('portfolio-form').reset();
+                document.getElementById('stocks-container').innerHTML = '';
+                document.getElementById('funds-container').innerHTML = '';
+                loadPortfolios();
+            }
+        }
+    }
+
+    async function savePortfolio() {
+        const portfolioName = document.getElementById('fund-name').value.trim();
+        if (!portfolioName) { alert('Lütfen kaydetmek için bir portföy adı girin.'); return; }
+        const stocks = Array.from(document.querySelectorAll('#stocks-container .stock-row')).map(r => ({ ticker: r.children[0].value.trim(), weight: r.children[1].value, adet: r.children[2].value }));
+        const funds = Array.from(document.querySelectorAll('#funds-container .stock-row')).map(r => ({ ticker: r.children[0].value.trim(), weight: r.children[1].value, adet: r.children[2].value }));
+        if (stocks.length === 0 && funds.length === 0) { alert('Lütfen en az bir varlık girin.'); return; }
+
+        const response = await fetch('/save_portfolio', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: portfolioName, stocks, funds })
+        });
+        const result = await response.json();
+        alert(response.ok ? result.success : 'Hata: ' + result.error);
+        if (response.ok) loadPortfolios();
+    }
+
+    async function calculatePortfolio(event) {
+        if (event) event.preventDefault();
+        // ... (Bu fonksiyonun içi bir önceki kodla tamamen aynı, değişiklik yok) ...
+        const resultArea = document.getElementById('result-area');
+        const resultContent = document.getElementById('result-content');
+        const loader = document.getElementById('loader');
+        resultArea.style.display = 'block';
+        resultContent.style.display = 'none';
+        loader.style.display = 'block';
+        const stocks = Array.from(document.querySelectorAll('#stocks-container .stock-row')).map(r => ({ ticker: r.children[0].value, weight: r.children[1].value }));
+        const funds = Array.from(document.querySelectorAll('#funds-container .stock-row')).map(r => ({ ticker: r.children[0].value, weight: r.children[1].value }));
+        try {
+            const response = await fetch('/calculate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ stocks, funds }) });
+            const result = await response.json();
+            loader.style.display = 'none';
+            resultContent.style.display = 'block';
+            const totalResultDiv = document.getElementById('total-result');
+            if (response.ok) {
+                const value = result.total_change;
+                totalResultDiv.textContent = `${value >= 0 ? '+' : ''}${value.toFixed(2)}%`;
+                totalResultDiv.className = value >= 0 ? 'positive' : 'negative';
+                const stockResults = result.details.filter(d => d.type === 'stock');
+                const fundResults = result.details.filter(d => d.type === 'fund');
+                const stockContainer = document.getElementById('stock-results-container');
+                if (stockResults.length > 0) {
+                    const timeString = new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+                    document.getElementById('stock-title').innerHTML = `Hisse Senetleri <span class="title-meta">(${timeString} itibarıyla - 15 dk gecikmeli veri)</span>`;
+                    populateTable('stock', stockResults);
+                    stockContainer.style.display = 'block';
+                } else { stockContainer.style.display = 'none'; }
+                const fundContainer = document.getElementById('fund-results-container');
+                if (fundResults.length > 0) {
+                    const latestDateRange = fundResults[0]?.date_range || 'Tarih Bilgisi Yok';
+                    document.getElementById('fund-title').innerHTML = `Yatırım Fonları <span class="title-meta">(${latestDateRange})</span>`;
+                    populateTable('fund', fundResults);
+                    fundContainer.style.display = 'block';
+                } else { fundContainer.style.display = 'none'; }
+            } else {
+                totalResultDiv.textContent = `Hata: ${result.error}`;
+                totalResultDiv.className = 'negative';
+                document.getElementById('stock-results-container').style.display = 'none';
+                document.getElementById('fund-results-container').style.display = 'none';
+            }
+        } catch (error) {
+            loader.style.display = 'none';
+            resultContent.style.display = 'block';
+            document.getElementById('total-result').textContent = 'Sunucuya bağlanırken bir hata oluştu.';
+        }
+    }
+
+    function populateTable(type, data) {
+        const head = document.getElementById(`${type}-table-head`);
+        const body = document.getElementById(`${type}-table-body`);
+        head.innerHTML = `<tr><th>${type === 'stock' ? 'Hisse' : 'Fon'} Kodu</th><th>Günlük Değişim (%)</th><th>Portföye Etkisi (%)</th></tr>`;
+        body.innerHTML = '';
+        data.forEach(item => {
+            const row = document.createElement('tr');
+            row.innerHTML = `<td>${item.ticker}</td><td class="${item.daily_change >= 0 ? 'positive' : 'negative'}">${item.daily_change.toFixed(2)}%</td><td class="${item.weighted_impact >= 0 ? 'positive' : 'negative'}">${item.weighted_impact.toFixed(2)}%</td>`;
+            body.appendChild(row);
+        });
+    }
+</script>
+</body>
+</html>
