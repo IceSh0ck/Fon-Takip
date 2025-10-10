@@ -1,0 +1,226 @@
+[
+    {
+        "name": "DFI",
+        "stocks": [
+            {
+                "ticker": "IEYHO",
+                "weight": 64.63,
+                "adet": 92369553
+            },
+            {
+                "ticker": "ECILC",
+                "weight": 20.45,
+                "adet": 11482510
+            },
+            {
+                "ticker": "PETKM",
+                "weight": 7.75,
+                "adet": 21145255
+            },
+            {
+                "ticker": "INVES",
+                "weight": 4.25,
+                "adet": 696380
+            },
+            {
+                "ticker": "SISE",
+                "weight": 1.71,
+                "adet": 2000000
+            },
+            {
+                "ticker": "ECZYT",
+                "weight": 1.21,
+                "adet": 183551
+            }
+        ]
+    },
+    {
+        "name": "TLY",
+        "stocks": [
+            {
+                "ticker": "TEHOL",
+                "weight": "55.15",
+                "adet": "348260804"
+            },
+            {
+                "ticker": "TERA",
+                "weight": "28.73",
+                "adet": "10816691"
+            },
+            {
+                "ticker": "GRTHO",
+                "weight": "5.14",
+                "adet": "2711281"
+            },
+            {
+                "ticker": "ADESE",
+                "weight": "4.75",
+                "adet": "90141385"
+            },
+            {
+                "ticker": "SMRVA",
+                "weight": "1.68",
+                "adet": "1820147"
+            },
+            {
+                "ticker": "DSTKF",
+                "weight": "1.35",
+                "adet": "941049"
+            },
+            {
+                "ticker": "PEKGY",
+                "weight": "0.69",
+                "adet": "21996862"
+            },
+            {
+                "ticker": "DMRGD",
+                "weight": "0.63",
+                "adet": "7491327"
+            },
+            {
+                "ticker": "ENSRI",
+                "weight": "0.62",
+                "adet": "1862892"
+            },
+            {
+                "ticker": "HEDEF",
+                "weight": "0.32",
+                "adet": "1584544"
+            },
+            {
+                "ticker": "IZFAS",
+                "weight": "0.3",
+                "adet": "642900"
+            },
+            {
+                "ticker": "TRHOL",
+                "weight": "0.16",
+                "adet": "184021"
+            },
+            {
+                "ticker": "TURSG",
+                "weight": "0.05",
+                "adet": "1684000"
+            },
+            {
+                "ticker": "EREGL",
+                "weight": "0.03",
+                "adet": "340000"
+            },
+            {
+                "ticker": "GARAN",
+                "weight": "0.02",
+                "adet": "61600"
+            },
+            {
+                "ticker": "THYAO",
+                "weight": "0.02",
+                "adet": "25125"
+            },
+            {
+                "ticker": "TCELL",
+                "weight": "0.02",
+                "adet": "75000"
+            }
+        ],
+        "funds": [
+            {
+                "ticker": "T3B",
+                "weight": "0.34",
+                "adet": ""
+            }
+        ]
+    },
+    {
+        "name": "IIE",
+        "stocks": [
+            {
+                "ticker": "BSOKE",
+                "weight": "4.48",
+                "adet": "11535000"
+            },
+            {
+                "ticker": "BTCIM",
+                "weight": "3.51",
+                "adet": "31500000"
+            },
+            {
+                "ticker": "CCOLA",
+                "weight": "0.65",
+                "adet": "550000"
+            },
+            {
+                "ticker": "EMKEL",
+                "weight": "0.65",
+                "adet": "250000"
+            },
+            {
+                "ticker": "GRTHO",
+                "weight": "59.52",
+                "adet": "4700000"
+            },
+            {
+                "ticker": "HALKB",
+                "weight": "1.36",
+                "adet": "2000000"
+            },
+            {
+                "ticker": "PGSUS",
+                "weight": "4.17",
+                "adet": "746609"
+            },
+            {
+                "ticker": "SISE",
+                "weight": "2.21",
+                "adet": "2300000"
+            },
+            {
+                "ticker": "TAVHL",
+                "weight": "0.77",
+                "adet": "125000"
+            },
+            {
+                "ticker": "TCELL",
+                "weight": "7.41",
+                "adet": "2937488"
+            },
+            {
+                "ticker": "YKBNK",
+                "weight": "0.17",
+                "adet": "200000"
+            },
+            {
+                "ticker": "TRDHVKA32616",
+                "weight": "2",
+                "adet": "100000000"
+            },
+            {
+                "ticker": "TRDHVKA52614",
+                "weight": "1.08",
+                "adet": "40000000"
+            }
+        ],
+        "funds": [
+            {
+                "ticker": "IIP",
+                "weight": "0.4",
+                "adet": "54357137"
+            },
+            {
+                "ticker": "IMR",
+                "weight": "0.28",
+                "adet": "2150"
+            },
+            {
+                "ticker": "IST",
+                "weight": "11.27",
+                "adet": "3187878785"
+            },
+            {
+                "ticker": "PRE",
+                "weight": "0.07",
+                "adet": "26098361"
+            }
+        ]
+    }
+]
