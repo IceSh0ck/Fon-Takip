@@ -13,8 +13,7 @@ PORTFOLIOS_FILE = 'portfolios.json'
 # --- Veri Taşıma ve Yükleme Fonksiyonları (Güvenli versiyon) ---
 
 def migrate_portfolios_if_needed():
-    if not os.path.exists(PORTFOLIOS_FILE):
-        return
+    if not os.path.exists(PORTFOLIOS_FILE): return
     try:
         with open(PORTFOLIOS_FILE, 'r+', encoding='utf-8') as f:
             first_char = f.read(1)
@@ -50,7 +49,7 @@ def save_portfolios(portfolios_dict):
 
 migrate_portfolios_if_needed()
 
-# --- API Endpointleri ---
+# --- API Endpointleri (Diğerlerinde değişiklik yok) ---
 
 @app.route('/')
 def index():
@@ -91,7 +90,6 @@ def save_portfolio():
 
 @app.route('/calculate', methods=['POST'])
 def calculate():
-    # Bu fonksiyonda değişiklik yok
     data = request.get_json()
     stocks = data.get('stocks', [])
     funds = data.get('funds', [])
@@ -127,7 +125,7 @@ def calculate():
         except Exception: asset_details.append({'type': 'fund', 'ticker': fund_code, 'daily_change': 0.0, 'weighted_impact': 0.0, 'error': 'Veri alınamadı'})
     return jsonify({'total_change': total_portfolio_change, 'details': asset_details})
 
-# --- BU FONKSİYON TAMAMEN DÜZELTİLDİ ---
+# --- BU FONKSİYON NİHAİ OLARAK DÜZELTİLDİ ---
 @app.route('/calculate_historical/<portfolio_name>', methods=['GET'])
 def calculate_historical(portfolio_name):
     portfolios = load_portfolios()
@@ -142,24 +140,19 @@ def calculate_historical(portfolio_name):
 
     asset_prices_df = pd.DataFrame()
     
-    # DÜZELTME BAŞLANGICI: Tek ve çoklu hisse durumunu doğru ele alan mantık
+    # Adım 1: Hisse verilerini çek
     stocks_in_portfolio = portfolio.get('stocks', [])
     if stocks_in_portfolio:
-        stock_tickers = [s['ticker'].strip().upper() + '.IS' for s in stocks_in_portfolio]
+        stock_tickers_is = [s['ticker'].strip().upper() + '.IS' for s in stocks_in_portfolio]
         try:
-            stock_data = yf.download(stock_tickers, start=start_date, end=end_date, progress=False)
+            stock_data = yf.download(stock_tickers_is, start=start_date, end=end_date, progress=False)
             if not stock_data.empty:
-                # Eğer tek hisse varsa, yfinance 'Close'u direkt sütun olarak verir.
-                # Eğer çok hisse varsa, 'Close' bir üst düzey sütun başlığı olur.
-                if len(stock_tickers) == 1:
-                    close_prices = stock_data[['Close']].rename(columns={'Close': stock_tickers[0]})
-                else:
-                    close_prices = stock_data['Close']
+                close_prices = stock_data['Close'] if len(stock_tickers_is) > 1 else stock_data[['Close']]
                 asset_prices_df = pd.concat([asset_prices_df, close_prices], axis=1)
         except Exception as e:
             print(f"Hisse senedi verisi alınırken hata: {e}")
-    # DÜZELTME SONU
-            
+
+    # Adım 2: Fon verilerini çek
     sdt_str, fdt_str = start_date.strftime('%d-%m-%Y'), end_date.strftime('%d-%m-%Y')
     for fund in portfolio.get('funds', []):
         fund_code = fund['ticker'].strip().upper()
@@ -175,17 +168,23 @@ def calculate_historical(portfolio_name):
     
     if asset_prices_df.empty: return jsonify({'error': 'Tarihsel veri bulunamadı.'}), 400
     
+    # DÜZELTME: Sütun isimlerindeki '.IS' uzantısını kaldırarak isimleri eşleştir.
+    # Bu, hatanın ana kaynağıydı.
+    asset_prices_df.columns = asset_prices_df.columns.str.replace('.IS', '', regex=False)
+    
+    # Adım 3: Getirileri hesapla
     asset_prices_df = asset_prices_df.ffill().dropna(how='all')
     daily_returns = asset_prices_df.pct_change()
 
     weights_dict = {asset['ticker'].strip().upper(): float(asset['weight']) / 100 for asset in all_assets}
     
-    # Sadece portföydeki varlıkların ağırlıklarını kullan
+    # Ağırlık serisini DataFrame sütunlarıyla eşleştir
     aligned_weights = pd.Series(weights_dict).reindex(daily_returns.columns).fillna(0)
 
     portfolio_daily_returns = (daily_returns * aligned_weights).sum(axis=1) * 100
     valid_returns = portfolio_daily_returns.dropna()
     
+    # Son 30 günü al ve döndür
     dates = valid_returns.index.strftime('%d.%m.%Y').tolist()[-30:]
     returns = valid_returns.tolist()[-30:]
     
@@ -193,7 +192,6 @@ def calculate_historical(portfolio_name):
 
 @app.route('/compare_versions/<portfolio_name>', methods=['GET'])
 def compare_versions(portfolio_name):
-    # Bu fonksiyonda değişiklik yok
     portfolios = load_portfolios()
     portfolio_data = portfolios.get(portfolio_name)
     if not portfolio_data or not portfolio_data.get('current') or not portfolio_data.get('history'):
@@ -212,7 +210,6 @@ def compare_versions(portfolio_name):
 
 @app.route('/revert_portfolio/<portfolio_name>', methods=['POST'])
 def revert_portfolio(portfolio_name):
-    # Bu fonksiyonda değişiklik yok
     portfolios = load_portfolios()
     portfolio_data = portfolios.get(portfolio_name)
     if not portfolio_data or not portfolio_data.get('history'):
@@ -224,7 +221,6 @@ def revert_portfolio(portfolio_name):
     save_portfolios(portfolios)
     return jsonify({'success': f'"{portfolio_name}" portföyü bir önceki versiyona başarıyla geri alındı.'})
 
-# DÜZELTİLDİ: Silme işlemi artık frontend'den gelen veriyi doğru okuyor.
 @app.route('/delete_portfolio', methods=['POST'])
 def delete_portfolio():
     data = request.get_json()
