@@ -10,20 +10,22 @@ app = Flask(__name__)
 
 PORTFOLIOS_FILE = 'portfolios.json'
 
-# --- Portföy Kaydetme/Yükleme Fonksiyonları (Değişiklik yok) ---
+# --- Portföy Kaydetme/Yükleme Fonksiyonları ---
 def load_portfolios():
     if not os.path.exists(PORTFOLIOS_FILE):
         return {}
     try:
         with open(PORTFOLIOS_FILE, 'r', encoding='utf-8') as f:
-            portfolios_list = json.load(f)
-            return {p['name']: p for p in portfolios_list}
+            # GÜNCELLENDİ: json.load() doğrudan bir dict döndürecek
+            portfolios_data = json.load(f)
+            return portfolios_data
     except (json.JSONDecodeError, FileNotFoundError):
         return {}
 
 def save_portfolios(portfolios_dict):
     with open(PORTFOLIOS_FILE, 'w', encoding='utf-8') as f:
-        json.dump(list(portfolios_dict.values()), f, indent=4, ensure_ascii=False)
+        # GÜNCELLENDİ: Sözlüğün tamamını kaydet
+        json.dump(portfolios_dict, f, indent=4, ensure_ascii=False)
 
 # --- API Endpointleri ---
 @app.route('/')
@@ -38,23 +40,51 @@ def get_portfolios():
 @app.route('/get_portfolio/<portfolio_name>', methods=['GET'])
 def get_portfolio(portfolio_name):
     portfolios = load_portfolios()
-    portfolio = portfolios.get(portfolio_name)
-    if portfolio:
-        return jsonify(portfolio)
+    portfolio_data = portfolios.get(portfolio_name)
+    if portfolio_data and 'current' in portfolio_data:
+        # Sadece güncel versiyonu döndür
+        return jsonify(portfolio_data['current'])
+    elif portfolio_data: # Eski formatla uyumluluk için
+        return jsonify(portfolio_data)
     return jsonify({'error': 'Portföy bulunamadı'}), 404
 
+# GÜNCELLENDİ: Portföy kaydetme mantığı artık versiyonlama yapıyor
 @app.route('/save_portfolio', methods=['POST'])
 def save_portfolio():
     data = request.get_json()
     portfolio_name = data.get('name')
     stocks = data.get('stocks', [])
     funds = data.get('funds', [])
+    
     if not portfolio_name or (not stocks and not funds):
         return jsonify({'error': 'Portföy adı ve en az bir varlık girilmelidir'}), 400
+
     portfolios = load_portfolios()
-    portfolios[portfolio_name] = {'name': portfolio_name, 'stocks': stocks, 'funds': funds}
+    
+    # Mevcut portföy verisini al veya yeni oluştur
+    existing_portfolio_data = portfolios.get(portfolio_name, {'current': None, 'history': []})
+    
+    # Eğer portföy eski yapıdaysa, yeni yapıya dönüştür
+    if 'current' not in existing_portfolio_data:
+        old_data = existing_portfolio_data.copy()
+        existing_portfolio_data = {'current': old_data, 'history': []}
+
+    # Eğer bir "current" versiyon varsa, bunu tarihle birlikte "history"e taşı
+    if existing_portfolio_data.get('current'):
+        previous_version = existing_portfolio_data['current']
+        # 'save_date' anahtarının olmamasını kontrol et, sonsuz döngüyü engelle
+        if 'save_date' not in previous_version:
+             previous_version['save_date'] = date.today().strftime('%Y-%m-%d')
+             existing_portfolio_data['history'].insert(0, previous_version) # En başa ekle
+
+    # Gelen yeni veriyi "current" olarak ayarla
+    new_current_version = {'name': portfolio_name, 'stocks': stocks, 'funds': funds}
+    existing_portfolio_data['current'] = new_current_version
+
+    portfolios[portfolio_name] = existing_portfolio_data
     save_portfolios(portfolios)
-    return jsonify({'success': f'"{portfolio_name}" portföyü başarıyla kaydedildi.'})
+    
+    return jsonify({'success': f'"{portfolio_name}" portföyü başarıyla kaydedildi. Değişiklikler geçmişe eklendi.'})
 
 @app.route('/calculate', methods=['POST'])
 def calculate():
@@ -112,17 +142,19 @@ def calculate():
             asset_details.append({ 'type': 'fund', 'ticker': fund_code, 'daily_change': 0.0, 'weighted_impact': 0.0, 'error': 'Veri alınamadı' })
     return jsonify({ 'total_change': total_portfolio_change, 'details': asset_details })
 
-
-# YENİ: DÜZENLENMİŞ VE İÇİ DOLDURULMUŞ FONKSİYON
 @app.route('/calculate_historical/<portfolio_name>', methods=['GET'])
 def calculate_historical(portfolio_name):
     portfolios = load_portfolios()
-    portfolio = portfolios.get(portfolio_name)
-    if not portfolio:
+    portfolio_container = portfolios.get(portfolio_name)
+    if not portfolio_container:
         return jsonify({'error': 'Portföy bulunamadı'}), 404
 
+    portfolio = portfolio_container.get('current')
+    if not portfolio:
+         return jsonify({'error': 'Portföyün güncel versiyonu bulunamadı.'}), 404
+
     end_date = date.today()
-    start_date = end_date - timedelta(days=45) # Hafta sonları ve tatilleri telafi etmek için daha geniş aralık
+    start_date = end_date - timedelta(days=45)
     
     all_assets = portfolio.get('stocks', []) + portfolio.get('funds', [])
     if not all_assets:
@@ -130,7 +162,6 @@ def calculate_historical(portfolio_name):
 
     asset_prices_df = pd.DataFrame()
     
-    # Hisse verilerini çek
     stock_tickers = [s['ticker'].strip().upper() + '.IS' for s in portfolio.get('stocks', [])]
     if stock_tickers:
         try:
@@ -140,7 +171,6 @@ def calculate_historical(portfolio_name):
         except Exception as e:
             print(f"Hisse senedi verisi alınırken hata: {e}")
 
-    # Fon verilerini çek
     sdt_str = start_date.strftime('%d-%m-%Y')
     fdt_str = end_date.strftime('%d-%m-%Y')
     for fund in portfolio.get('funds', []):
@@ -165,24 +195,81 @@ def calculate_historical(portfolio_name):
 
     portfolio_daily_returns = []
     
-    # Ağırlıkları bir sözlükte topla
     weights = {asset['ticker'].strip().upper(): float(asset['weight']) / 100 for asset in all_assets}
 
     for index, row in daily_returns.iterrows():
         daily_portfolio_return = 0
         for ticker, ret in row.items():
-            # Ticker'ları .IS olmadan eşleştir
             clean_ticker = ticker.replace('.IS', '')
             if clean_ticker in weights:
                 daily_portfolio_return += weights[clean_ticker] * ret
         if pd.notna(daily_portfolio_return):
-            portfolio_daily_returns.append(daily_portfolio_return * 100) # Yüzde olarak
+            portfolio_daily_returns.append(daily_portfolio_return * 100)
 
-    # Son 30 işlem gününü al
     dates = daily_returns.index.strftime('%d.%m.%Y').tolist()[-30:]
     returns = portfolio_daily_returns[-30:]
 
     return jsonify({'dates': dates, 'returns': returns})
+
+# YENİ: PORTFÖY AĞIRLIK DEĞİŞİMİ İÇİN YENİ ENDPOINT
+@app.route('/compare_versions/<portfolio_name>', methods=['GET'])
+def compare_versions(portfolio_name):
+    portfolios = load_portfolios()
+    portfolio_data = portfolios.get(portfolio_name)
+
+    if not portfolio_data or not portfolio_data.get('current') or not portfolio_data.get('history'):
+        return jsonify({'error': 'Karşılaştırma için yeterli geçmiş veri bulunamadı. Lütfen portföyü güncelleyip tekrar kaydedin.'}), 400
+
+    current_version = portfolio_data['current']
+    previous_version = portfolio_data['history'][0] # En son kaydedilen geçmiş
+
+    current_assets = {a['ticker'].upper(): float(a['weight']) for a in current_version.get('stocks', []) + current_version.get('funds', [])}
+    previous_assets = {a['ticker'].upper(): float(a['weight']) for a in previous_version.get('stocks', []) + previous_version.get('funds', [])}
+
+    all_tickers = sorted(list(set(current_assets.keys()) | set(previous_assets.keys())))
+
+    comparison_data = []
+    for ticker in all_tickers:
+        current_weight = current_assets.get(ticker, 0.0)
+        previous_weight = previous_assets.get(ticker, 0.0)
+        change = current_weight - previous_weight
+        comparison_data.append({
+            'ticker': ticker,
+            'previous_weight': previous_weight,
+            'current_weight': current_weight,
+            'change': change
+        })
+    
+    comparison_data.sort(key=lambda x: abs(x['change']), reverse=True)
+    
+    response_data = {
+        'comparison': comparison_data,
+        'current_date_str': date.today().strftime('%d.%m.%Y'),
+        'previous_date_str': datetime.strptime(previous_version.get('save_date', '1970-01-01'), '%Y-%m-%d').strftime('%d.%m.%Y')
+    }
+    return jsonify(response_data)
+
+# YENİ: PORTFÖY DEĞİŞİKLİĞİNİ GERİ ALMAK İÇİN ENDPOINT
+@app.route('/revert_portfolio/<portfolio_name>', methods=['POST'])
+def revert_portfolio(portfolio_name):
+    portfolios = load_portfolios()
+    portfolio_data = portfolios.get(portfolio_name)
+    if not portfolio_data or not portfolio_data.get('history'):
+        return jsonify({'error': 'Geri alınacak bir önceki versiyon bulunamadı.'}), 400
+
+    # En son geçmiş versiyonu al ve onu current yap
+    last_history_item = portfolio_data['history'].pop(0) 
+    
+    # save_date anahtarını silerek tekrar geçmişe eklenmesini sağla
+    if 'save_date' in last_history_item:
+        del last_history_item['save_date']
+        
+    portfolio_data['current'] = last_history_item
+    
+    portfolios[portfolio_name] = portfolio_data
+    save_portfolios(portfolios)
+    
+    return jsonify({'success': f'"{portfolio_name}" portföyü bir önceki versiyona başarıyla geri alındı.'})
 
 
 @app.route('/delete_portfolio', methods=['POST'])
