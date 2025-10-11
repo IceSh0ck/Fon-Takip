@@ -24,7 +24,7 @@ def save_portfolios(portfolios_dict):
     with open(PORTFOLIOS_FILE, 'w', encoding='utf-8') as f:
         json.dump(list(portfolios_dict.values()), f, indent=4, ensure_ascii=False)
 
-# --- API Endpointleri (Değişiklik yok) ---
+# --- API Endpointleri ---
 @app.route('/')
 def index():
     return render_template('index.html')
@@ -33,6 +33,13 @@ def index():
 def get_portfolios():
     portfolios = load_portfolios()
     return jsonify(sorted(list(portfolios.keys())))
+
+# YENİ EKLENEN FONKSİYON
+@app.route('/get_all_portfolios', methods=['GET'])
+def get_all_portfolios():
+    portfolios = load_portfolios()
+    # Sadece isimleri değil, tüm portföy verilerini liste olarak döndür
+    return jsonify(list(portfolios.values()))
 
 @app.route('/get_portfolio/<portfolio_name>', methods=['GET'])
 def get_portfolio(portfolio_name):
@@ -55,6 +62,20 @@ def save_portfolio():
     save_portfolios(portfolios)
     return jsonify({'success': f'"{portfolio_name}" portföyü başarıyla kaydedildi.'})
 
+@app.route('/delete_portfolio', methods=['POST'])
+def delete_portfolio():
+    data = request.get_json()
+    portfolio_name_to_delete = data.get('name')
+    if not portfolio_name_to_delete:
+        return jsonify({'error': 'Silinecek portföy adı belirtilmedi.'}), 400
+    portfolios = load_portfolios()
+    if portfolio_name_to_delete in portfolios:
+        del portfolios[portfolio_name_to_delete]
+        save_portfolios(portfolios)
+        return jsonify({'success': f'"{portfolio_name_to_delete}" portföyü başarıyla silindi.'})
+    else:
+        return jsonify({'error': 'Silinecek portföy bulunamadı.'}), 404
+
 @app.route('/calculate', methods=['POST'])
 def calculate():
     data = request.get_json()
@@ -68,71 +89,46 @@ def calculate():
     asset_details = []
 
     for stock in stocks:
-        ticker = stock.get('ticker').strip().upper()
-        weight = float(stock.get('weight', 0))
-        if ticker in ['NAKIT', 'CASH', 'TAHVIL', 'BOND', 'DEVLET TAHVILI']:
-            asset_details.append({ 'type': 'stock', 'ticker': ticker.capitalize(), 'daily_change': 0.0, 'weighted_impact': 0.0 })
-            continue
-        yf_ticker = ticker + '.IS' if not ticker.endswith('.IS') else ticker
         try:
-            hisse = yf.Ticker(yf_ticker)
-            hist = hisse.history(period="2d")
-            if len(hist) < 2:
-                daily_change_percent = 0.0
-            else:
-                daily_change_percent = (hist['Close'].iloc[-1] - hist['Close'].iloc[-2]) / hist['Close'].iloc[-2] * 100
+            ticker = stock.get('ticker').strip().upper()
+            weight = float(stock.get('weight', 0))
+            if ticker in ['NAKIT', 'CASH', 'TAHVIL', 'BOND', 'DEVLET TAHVILI']:
+                asset_details.append({ 'type': 'stock', 'ticker': ticker.capitalize(), 'daily_change': 0.0, 'weighted_impact': 0.0 })
+                continue
+            yf_ticker = ticker + '.IS' if not ticker.endswith('.IS') else ticker
+            hist = yf.Ticker(yf_ticker).history(period="2d")
+            daily_change_percent = (hist['Close'].iloc[-1] - hist['Close'].iloc[-2]) / hist['Close'].iloc[-2] * 100 if len(hist) >= 2 else 0.0
             weighted_change = (weight / 100) * daily_change_percent
             total_portfolio_change += weighted_change
             asset_details.append({ 'type': 'stock', 'ticker': ticker, 'daily_change': daily_change_percent, 'weighted_impact': weighted_change })
         except Exception:
-             asset_details.append({ 'type': 'stock', 'ticker': ticker, 'daily_change': 0.0, 'weighted_impact': 0.0, 'error': 'Veri alınamadı' })
+             asset_details.append({ 'type': 'stock', 'ticker': stock.get('ticker'), 'daily_change': 0.0, 'weighted_impact': 0.0, 'error': 'Veri alınamadı' })
 
-    today = date.today()
-    start_date = today - timedelta(days=10)
+    today, start_date = date.today(), date.today() - timedelta(days=10)
     sdt, fdt = start_date.strftime('%d-%m-%Y'), today.strftime('%d-%m-%Y')
     for fund in funds:
-        fund_code = fund.get('ticker').strip().upper()
-        weight = float(fund.get('weight', 0))
         try:
+            fund_code = fund.get('ticker').strip().upper()
+            weight = float(fund.get('weight', 0))
             tefas_url = f"https://www.tefas.gov.tr/api/DB/BindHistoryPrice?sdt={sdt}&fdt={fdt}&kod={fund_code}"
             response = requests.get(tefas_url, timeout=10)
-            response.raise_for_status()
             fund_data = [item for item in response.json() if item.get('BirimPayDegeri') is not None]
             if len(fund_data) >= 2:
-                last_price_info, prev_price_info = fund_data[-1], fund_data[-2]
-                daily_change_percent = (last_price_info['BirimPayDegeri'] - prev_price_info['BirimPayDegeri']) / prev_price_info['BirimPayDegeri'] * 100
-                date_range = f"{datetime.strptime(prev_price_info['TTarih'], '%Y-%m-%dT%H:%M:%S').strftime('%d.%m.%Y')} → {datetime.strptime(last_price_info['Tarih'], '%Y-%m-%dT%H:%M:%S').strftime('%d.%m.%Y')}"
+                last_price, prev_price = fund_data[-1]['BirimPayDegeri'], fund_data[-2]['BirimPayDegeri']
+                daily_change_percent = (last_price - prev_price) / prev_price * 100
             else:
-                daily_change_percent, date_range = 0.0, "Yetersiz Veri"
+                daily_change_percent = 0.0
             weighted_change = (weight / 100) * daily_change_percent
             total_portfolio_change += weighted_change
-            asset_details.append({ 'type': 'fund', 'ticker': fund_code, 'daily_change': daily_change_percent, 'weighted_impact': weighted_change, 'date_range': date_range })
         except Exception:
-             asset_details.append({ 'type': 'fund', 'ticker': fund_code, 'daily_change': 0.0, 'weighted_impact': 0.0, 'error': 'Veri alınamadı' })
-    return jsonify({ 'total_change': total_portfolio_change, 'details': asset_details })
+             total_portfolio_change += 0.0
 
+    return jsonify({ 'total_change': total_portfolio_change })
+
+# Bu fonksiyonda değişiklik yok
 @app.route('/calculate_historical/<portfolio_name>', methods=['GET'])
 def calculate_historical(portfolio_name):
-    # Bu fonksiyonda değişiklik yok
     pass
-
-# YENİ EKLENEN FONKSİYON
-@app.route('/delete_portfolio', methods=['POST'])
-def delete_portfolio():
-    data = request.get_json()
-    portfolio_name_to_delete = data.get('name')
-
-    if not portfolio_name_to_delete:
-        return jsonify({'error': 'Silinecek portföy adı belirtilmedi.'}), 400
-
-    portfolios = load_portfolios()
-
-    if portfolio_name_to_delete in portfolios:
-        del portfolios[portfolio_name_to_delete]
-        save_portfolios(portfolios)
-        return jsonify({'success': f'"{portfolio_name_to_delete}" portföyü başarıyla silindi.'})
-    else:
-        return jsonify({'error': 'Silinecek portföy bulunamadı.'}), 404
 
 if __name__ == '__main__':
     app.run(debug=True)
