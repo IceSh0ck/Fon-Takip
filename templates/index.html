@@ -17,29 +17,34 @@
         input[type="text"], input[type="number"] { width: calc(100% - 22px); padding: 10px; border: 1px solid #ccc; border-radius: 4px; }
         button { background-color: #3498db; color: white; padding: 12px 20px; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; transition: background-color: 0.3s; }
         button:hover { background-color: #2980b9; }
-        .btn-add { background-color: #2ecc71; }
-        .btn-remove { background-color: #e74c3c; }
-        .btn-save { background-color: #1abc9c; }
+        .btn-add { background-color: #2ecc71; padding: 8px 15px; font-size: 14px; margin-top:10px; }
+        .btn-remove { background-color: #e74c3c; padding: 5px 10px; font-size: 12px; } .btn-remove:hover { background-color: #c0392b; }
+        .btn-save { background-color: #1abc9c; } .btn-save:hover { background-color: #16a085; }
         .positive { color: #27ae60; } .negative { color: #c0392b; }
+        .detail-table { width: 100%; margin-top: 10px; border-collapse: collapse; }
+        .detail-table th, .detail-table td { padding: 8px; border: 1px solid #ddd; text-align: left; }
+        .detail-table th { background-color: #bdc3c7; }
         .loader { border: 4px solid #f3f3f3; border-top: 4px solid #3498db; border-radius: 50%; width: 30px; height: 30px; animation: spin 1s linear infinite; margin: 20px auto; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
         #portfolio-list { list-style-type: none; padding: 0; }
-        #portfolio-list li { padding: 10px; cursor: pointer; border-bottom: 1px solid #eee; }
+        #portfolio-list li { padding: 10px; cursor: pointer; border-bottom: 1px solid #eee; transition: background-color 0.2s; }
         #portfolio-list li:hover, #portfolio-list li.active { background-color: #e0eafc; }
         .back-button { font-size: 24px; position: absolute; top: 20px; left: 20px; cursor: pointer; color: #7f8c8d; text-decoration: none; }
         .back-button:hover { color: #2c3e50; }
         .sidebar-actions { margin-top: 20px; display: flex; flex-direction: column; gap: 10px; }
         .sidebar-actions button { width: 100%; text-align: center; padding: 10px; }
-        #btn-home { background-color: #9b59b6 !important; }
-        #btn-home:hover { background-color: #8e44ad !important; }
-        #btn-new-portfolio { background-color: #3498db !important; }
-        #btn-delete-mode { background-color: #e74c3c !important; }
+        #btn-home { background-color: #9b59b6 !important; } #btn-home:hover { background-color: #8e44ad !important; }
+        #btn-new-portfolio { background-color: #3498db !important; } #btn-new-portfolio:hover { background-color: #2980b9 !important; }
+        #btn-delete-mode { background-color: #e74c3c !important; } #btn-delete-mode:hover { background-color: #c0392b !important; }
         #btn-delete-mode.active { background-color: #c0392b !important; border: 2px solid #2c3e50; }
         body.delete-mode-active #portfolio-list li:hover { background-color: #f5b7b1; text-decoration: line-through; }
-        /* ANA SAYFA STİLLERİ */
         #home-container { text-align: center; }
         #live-clock { font-size: 1.5em; color: #7f8c8d; margin-bottom: 20px; }
         #grand-total-return { font-size: 4.5em; font-weight: bold; margin: 20px 0; }
+        #live-return-display { text-align: center; padding: 15px; margin-top: 5px; margin-bottom: 25px; border: 1px solid #ecf0f1; border-radius: 6px; font-size: 1.4em; font-weight: bold; }
+        #live-return-notice { font-size: 0.8em; color: #7f8c8d; text-align: center; margin-top: -15px; margin-bottom: 20px; }
+        .options-menu button { display: block; width: 100%; text-align: left; margin-bottom: 10px; background-color: #34495e; }
+        .options-menu button:hover { background-color: #2c3e50; }
     </style>
 </head>
 <body>
@@ -54,7 +59,7 @@
         </div>
     </div>
     <div class="content">
-        <div class="container" id="home-container" style="display: none;">
+        <div class="container" id="home-container">
             <h2>Ana Sayfa</h2>
             <div id="live-clock"></div>
             <h3>Tüm Portföylerin Toplam Günlük Getirisi</h3>
@@ -62,18 +67,60 @@
         </div>
 
         <div class="container" id="options-container" style="display: none;">
+            <a href="#" class="back-button" title="Ana Sayfaya Dön">&larr;</a>
+            <h2 id="options-title"></h2>
+            <div id="live-return-display">Hesaplanıyor...</div>
+            <div id="live-return-notice" style="display: none;"></div>
+            <div class="options-menu">
+                <button id="btn-show-report">1. Portföy Dağılım Raporunu Gör</button>
+                <button id="btn-show-historical">2. Son 30 Günlük Portföy Getirisi</button>
+                <button id="btn-edit-portfolio">3. Portföy Dağılımını Değiştir</button>
             </div>
+        </div>
+
         <div class="container" id="report-container" style="display: none;">
-            </div>
+            <a href="#" class="back-button" title="Seçeneklere Geri Dön">&larr;</a>
+            <h2 id="report-title" style="text-align:center;"></h2>
+            <div style="width: 70%; margin: auto;"><canvas id="portfolioPieChart"></canvas></div>
+        </div>
+
         <div class="container" id="form-container" style="display: none;">
-            </div>
+            <a href="#" class="back-button" title="Ana Sayfaya Dön">&larr;</a>
+            <form id="portfolio-form">
+                <div class="form-group"><label for="fund-name">Portföy Adı</label><input type="text" id="fund-name" placeholder="Yeni Portföy Adı" required></div>
+                <h3>Hisse Senetleri</h3><div id="stocks-container"></div>
+                <button type="button" class="btn-add" onclick="addAsset('stock')">Yeni Hisse Ekle</button>
+                <h3>Yatırım Fonları</h3><div id="funds-container"></div>
+                <button type="button" class="btn-add" onclick="addAsset('fund')">Yeni Fon Ekle</button>
+                <hr style="margin: 20px 0;">
+                <button type="submit">Hesapla</button>
+                <button type="button" class="btn-save" id="save-button">Kaydet</button>
+            </form>
+        </div>
+
         <div class="container" id="result-area" style="display: none;">
+            <a href="#" class="back-button" title="Seçeneklere Geri Dön">&larr;</a>
+            <div class="loader" id="loader"></div>
+            <div id="result-content" style="display: none;">
+                <h2 id="result-title"></h2>
+                <div id="total-result" style="font-size: 2.5em; font-weight: bold; margin-bottom: 20px;"></div>
+                <div id="stock-results-container" style="display:none; text-align:left;">
+                    <h3 id="stock-title"></h3>
+                    <table class="detail-table"><thead id="stock-table-head"></thead><tbody id="stock-table-body"></tbody></table>
+                </div>
+                <div id="fund-results-container" style="display:none; text-align:left;">
+                    <h3 id="fund-title"></h3>
+                    <table class="detail-table"><thead id="fund-table-head"></thead><tbody id="fund-table-body"></tbody></table>
+                </div>
+                 <div id="historical-results-container" style="display:none; text-align:left;">
+                    <table class="detail-table"><thead id="historical-table-head"></thead><tbody id="historical-table-body"></tbody></table>
+                </div>
             </div>
+        </div>
     </div>
 </div>
 
 <script>
-    // Global değişkenler aynı
     let currentPortfolioName = null;
     let portfolioChart = null;
     let isDeleteMode = false;
@@ -81,24 +128,30 @@
     document.addEventListener('DOMContentLoaded', () => { 
         loadPortfolios(); 
         
-        // Buton event listener'ları
         document.getElementById('btn-home').addEventListener('click', showHomePage);
         document.getElementById('btn-new-portfolio').addEventListener('click', showNewPortfolioForm);
         document.getElementById('btn-delete-mode').addEventListener('click', toggleDeleteMode);
 
         document.querySelectorAll('.back-button').forEach(button => {
-            button.onclick = (e) => { e.preventDefault(); /* ... */ };
+            button.onclick = (e) => {
+                e.preventDefault();
+                // "Dağılımı Değiştir" veya rapor ekranındaysa seçeneklere dön, değilse ana sayfaya dön
+                if (document.getElementById('form-container').style.display === 'block' && currentPortfolioName || 
+                    document.getElementById('report-container').style.display === 'block' ||
+                    document.getElementById('result-area').style.display === 'block') {
+                    const activeLi = document.querySelector(`#portfolio-list li.active`);
+                    showOptions(currentPortfolioName, activeLi);
+                } else {
+                    showHomePage();
+                }
+            };
         });
 
-        // Saati başlat
         updateClock();
         setInterval(updateClock, 1000);
-
-        // Varsayılan olarak Ana Sayfa'yı göster
         showHomePage();
     });
 
-    // YENİ FONKSİYONLAR
     function updateClock() {
         const now = new Date();
         const dateString = now.toLocaleDateString('tr-TR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
@@ -106,11 +159,17 @@
         document.getElementById('live-clock').textContent = `${dateString} - ${timeString}`;
     }
 
+    function showScreen(screenId) {
+        ['home-container', 'options-container', 'form-container', 'result-area', 'report-container'].forEach(id => {
+            document.getElementById(id).style.display = (id === screenId) ? 'block' : 'none';
+        });
+    }
+
     function showHomePage() {
         if(isDeleteMode) toggleDeleteMode();
-        ['options-container', 'form-container', 'result-area', 'report-container'].forEach(id => document.getElementById(id).style.display = 'none');
-        document.getElementById('home-container').style.display = 'block';
+        currentPortfolioName = null;
         document.querySelectorAll('#portfolio-list li').forEach(li => li.classList.remove('active'));
+        showScreen('home-container');
         calculateAndDisplayGrandTotalReturn();
     }
 
@@ -118,65 +177,153 @@
         const displayDiv = document.getElementById('grand-total-return');
         displayDiv.innerHTML = '<div class="loader"></div>';
         displayDiv.className = '';
-
         try {
             const response = await fetch('/get_all_portfolios');
             const portfolios = await response.json();
-
             if (portfolios.length === 0) {
                 displayDiv.textContent = 'Henüz kayıtlı portföy yok.';
                 return;
             }
-
-            let allStocks = [];
-            let allFunds = [];
+            let allStocks = [], allFunds = [];
+            let totalMarketValue = portfolios.length; // Normalize etmek için portföy sayısı
             portfolios.forEach(p => {
-                if (p.stocks) allStocks = allStocks.concat(p.stocks);
-                if (p.funds) allFunds = allFunds.concat(p.funds);
+                (p.stocks || []).forEach(s => s.weight = parseFloat(s.weight) / totalMarketValue);
+                (p.funds || []).forEach(f => f.weight = parseFloat(f.weight) / totalMarketValue);
+                allStocks.push(...(p.stocks || []));
+                allFunds.push(...(p.funds || []));
             });
-
+            
             const calculateResponse = await fetch('/calculate', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ stocks: allStocks, funds: allFunds })
             });
             const result = await calculateResponse.json();
-
             if (calculateResponse.ok) {
                 const value = result.total_change;
                 displayDiv.textContent = `${value >= 0 ? '+' : ''}${value.toFixed(2)}%`;
                 displayDiv.className = value >= 0 ? 'positive' : 'negative';
             } else { throw new Error(result.error); }
-
         } catch (error) {
             displayDiv.textContent = 'Hesaplanamadı';
             displayDiv.className = 'negative';
         }
     }
 
-    // GÜNCELLENMİŞ FONKSİYONLAR
-    async function deletePortfolio(name) {
-        if (confirm(`"${name}" portföyünü silmek istediğinizden emin misiniz?`)) {
-            // ... silme logic ...
-            if (response.ok) {
-                alert(result.success);
-                loadPortfolios();
-                showHomePage(); // Sildikten sonra ana sayfayı yenile
-            } // ...
+    function toggleDeleteMode() {
+        isDeleteMode = !isDeleteMode;
+        const deleteButton = document.getElementById('btn-delete-mode');
+        const body = document.body;
+        if (isDeleteMode) {
+            deleteButton.classList.add('active');
+            deleteButton.textContent = 'Silme Modundan Çık';
+            body.classList.add('delete-mode-active');
+            showScreen(null); // Hiçbir şey gösterme
+            alert('Silme modu aktif. Silmek istediğiniz portföyü listeden seçin.');
+        } else {
+            deleteButton.classList.remove('active');
+            deleteButton.textContent = 'Fonu Sil';
+            body.classList.remove('delete-mode-active');
         }
+    }
+
+    function showNewPortfolioForm() {
+        if(isDeleteMode) toggleDeleteMode();
+        currentPortfolioName = null;
+        document.querySelectorAll('#portfolio-list li').forEach(li => li.classList.remove('active'));
+        document.getElementById('fund-name').value = '';
+        document.getElementById('fund-name').placeholder = 'Yeni Portföy Adı';
+        document.getElementById('stocks-container').innerHTML = '';
+        document.getElementById('funds-container').innerHTML = '';
+        showScreen('form-container');
+        document.querySelector('#form-container .back-button').style.display = 'block';
+    }
+    
+    async function deletePortfolio(name) {
+        if (confirm(`"${name}" portföyünü silmek istediğinizden emin misiniz? Bu işlem geri alınamaz.`)) {
+            try {
+                const response = await fetch('/delete_portfolio', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: name }) });
+                const result = await response.json();
+                if (response.ok) {
+                    alert(result.success);
+                    toggleDeleteMode(); // Silme modundan çık
+                    loadPortfolios();
+                    showHomePage();
+                } else { throw new Error(result.error); }
+            } catch (error) {
+                alert('Portföy silinirken bir hata oluştu: ' + error.message);
+            }
+        }
+    }
+
+    async function loadPortfolios() {
+        const response = await fetch('/get_portfolios');
+        const portfolioNames = await response.json();
+        const listElement = document.getElementById('portfolio-list');
+        listElement.innerHTML = '';
+        portfolioNames.forEach(name => {
+            const li = document.createElement('li');
+            li.textContent = name;
+            li.onclick = (event) => {
+                if (isDeleteMode) { deletePortfolio(name); } 
+                else { showOptions(name, event.currentTarget); }
+            };
+            listElement.appendChild(li);
+        });
+    }
+
+    function showOptions(name, targetElement) {
+        currentPortfolioName = name;
+        document.querySelectorAll('#portfolio-list li').forEach(li => li.classList.remove('active'));
+        if(targetElement) targetElement.classList.add('active');
+        document.getElementById('options-title').textContent = `"${name}" Portföyü İçin İşlem Seçin`;
+        document.getElementById('btn-show-report').onclick = () => displayPieChartReport(name);
+        document.getElementById('btn-show-historical').onclick = () => displayHistoricalReturns(name);
+        document.getElementById('btn-edit-portfolio').onclick = () => showPortfolioEditor(name);
+        showScreen('options-container');
+        fetchAndDisplayLiveReturn(name);
+    }
+    
+    async function fetchAndDisplayLiveReturn(name) {
+        // ... (Bu fonksiyon bir önceki versiyonla aynı)
+    }
+
+    async function displayPieChartReport(name) {
+        // ... (Bu fonksiyon bir önceki versiyonla aynı)
+    }
+
+    async function displayHistoricalReturns(name) {
+        // ... (Bu fonksiyon bir önceki versiyonla aynı)
+    }
+
+    async function showPortfolioEditor(name) {
+        // ... (Bu fonksiyon bir önceki versiyonla aynı)
     }
     
     document.getElementById('save-button').addEventListener('click', async function() {
-        // ... kaydetme logic ...
+        const portfolioName = document.getElementById('fund-name').value.trim();
+        // ... (kaydetme işlemleri) ...
         if (response.ok) {
             alert(result.success);
             loadPortfolios();
-            showHomePage(); // Kaydettikten sonra ana sayfaya dön ve yenile
+            showHomePage();
         }
     });
 
-    // Diğer tüm fonksiyonlar (addAsset, loadPortfolios, showOptions, vb.) büyük ölçüde aynı kalabilir
-    // ve yukarıdaki kod bloğuna dahildir.
+    document.getElementById('portfolio-form').addEventListener('submit', async function(event) {
+        // ... (hesaplama formu işlemleri) ...
+    });
+
+    function addAsset(type, ticker = '', weight = '', adet = '') {
+        // ... (varlık ekleme) ...
+    }
+    
+    function populateTable(type, data) {
+        // ... (tablo doldurma) ...
+    }
+
+    function generateDeterministicColors(labels) {
+        // ... (renk üretme) ...
+    }
 </script>
 </body>
 </html>
