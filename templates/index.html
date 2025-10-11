@@ -10,13 +10,13 @@
         .main-container { display: flex; flex-wrap: wrap; gap: 20px; max-width: 1200px; margin: 20px auto; }
         .sidebar { flex: 1; min-width: 250px; background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); align-self: flex-start; }
         .content { flex: 3; min-width: 500px; }
-        .container { background: #fff; padding: 30px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); margin-bottom: 20px; position: relative; /* Geri oku için eklendi */ }
+        .container { background: #fff; padding: 30px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); margin-bottom: 20px; position: relative; }
         h1, h2, h3 { color: #2c3e50; }
         h3 { border-bottom: 2px solid #ecf0f1; padding-bottom: 10px; margin-top: 25px; }
         .title-meta { font-size: 0.8em; color: #7f8c8d; font-weight: normal; margin-left: 10px; }
         .stock-row { display: grid; grid-template-columns: 2fr 1fr 1fr auto; gap: 10px; margin-bottom: 10px; align-items: center; }
         input[type="text"], input[type="number"] { width: calc(100% - 22px); padding: 10px; border: 1px solid #ccc; border-radius: 4px; }
-        button { background-color: #3498db; color: white; padding: 12px 20px; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; transition: background-color 0.3s; }
+        button { background-color: #3498db; color: white; padding: 12px 20px; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; transition: background-color: 0.3s; }
         button:hover { background-color: #2980b9; }
         .btn-add { background-color: #2ecc71; padding: 8px 15px; font-size: 14px; margin-top:10px; }
         .btn-remove { background-color: #e74c3c; padding: 5px 10px; font-size: 12px; } .btn-remove:hover { background-color: #c0392b; }
@@ -29,14 +29,15 @@
         .loader { border: 4px solid #f3f3f3; border-top: 4px solid #3498db; border-radius: 50%; width: 30px; height: 30px; animation: spin 1s linear infinite; margin: 20px auto; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
         #portfolio-list { list-style-type: none; padding: 0; }
-        #portfolio-list li { padding: 10px; cursor: pointer; border-bottom: 1px solid #eee; transition: background-color 0.2s; }
+        #portfolio-list li { padding: 10px; cursor: pointer; border-bottom: 1px solid #eee; transition: background-color: 0.2s; }
         #portfolio-list li:hover, #portfolio-list li.active { background-color: #e0eafc; }
         .options-menu button { display: block; width: 100%; text-align: left; margin-bottom: 10px; background-color: #34495e; }
         .options-menu button:hover { background-color: #2c3e50; }
-        /* YENİ EKLENEN STİLLER */
-        #back-to-options { font-size: 24px; position: absolute; top: 15px; left: 20px; cursor: pointer; color: #7f8c8d; transition: color 0.2s; }
-        #back-to-options:hover { color: #2c3e50; }
+        /* YENİ VE GÜNCELLENMİŞ STİLLER */
+        .back-button { font-size: 24px; position: absolute; top: 15px; left: 20px; cursor: pointer; color: #7f8c8d; transition: color 0.2s; }
+        .back-button:hover { color: #2c3e50; }
         #live-return-display { text-align: center; padding: 15px; margin-top: 5px; margin-bottom: 25px; border: 1px solid #ecf0f1; border-radius: 6px; font-size: 1.4em; font-weight: bold; }
+        #live-return-notice { font-size: 0.8em; color: #7f8c8d; text-align: center; margin-top: -15px; margin-bottom: 20px; }
     </style>
 </head>
 <body>
@@ -49,6 +50,7 @@
         <div class="container" id="options-container" style="display: none;">
             <h2 id="options-title"></h2>
             <div id="live-return-display">Hesaplanıyor...</div>
+            <div id="live-return-notice" style="display: none;"></div>
             <div class="options-menu">
                 <button id="btn-show-report">1. Portföy Dağılım Raporunu Gör</button>
                 <button id="btn-show-historical">2. Son 30 Günlük Portföy Getirisi</button>
@@ -57,12 +59,13 @@
         </div>
 
         <div class="container" id="report-container" style="display: none;">
+            <span class="back-button" title="Seçeneklere Geri Dön">&larr;</span>
             <h2 id="report-title"></h2>
             <div style="width: 70%; margin: auto;"><canvas id="portfolioPieChart"></canvas></div>
         </div>
 
         <div class="container" id="form-container" style="display: block;">
-             <span id="back-to-options" style="display: none;" title="Seçeneklere Geri Dön">&larr;</span>
+            <span class="back-button" title="Seçeneklere Geri Dön" style="display: none;">&larr;</span>
             <form id="portfolio-form">
                 <div class="form-group"><label for="fund-name">Portföy Adı</label><input type="text" id="fund-name" placeholder="Örn: Büyüme Portföyüm" required></div>
                 <h3>Hisse Senetleri</h3><div id="stocks-container"></div>
@@ -76,6 +79,7 @@
         </div>
 
         <div class="container" id="result-area" style="display: none; text-align:center;">
+            <span class="back-button" title="Seçeneklere Geri Dön">&larr;</span>
             <div class="loader" id="loader"></div>
             <div id="result-content" style="display: none;">
                 <h2 id="result-title"></h2><div id="total-result"></div>
@@ -101,13 +105,15 @@
 
     document.addEventListener('DOMContentLoaded', () => { 
         loadPortfolios(); 
-        // YENİ: Geri okuna tıklama olayı
-        document.getElementById('back-to-options').onclick = () => {
-            if(currentPortfolioName) {
-                const activeLi = document.querySelector(`#portfolio-list li.active`);
-                showOptions(currentPortfolioName, activeLi);
-            }
-        };
+        // YENİ: Tüm geri oklarına aynı tıklama olayını atama
+        document.querySelectorAll('.back-button').forEach(button => {
+            button.onclick = () => {
+                if(currentPortfolioName) {
+                    const activeLi = document.querySelector(`#portfolio-list li.active`);
+                    showOptions(currentPortfolioName, activeLi);
+                }
+            };
+        });
     });
 
     function addAsset(type, ticker = '', weight = '', adet = '') {
@@ -136,7 +142,6 @@
         });
     }
 
-    // GÜNCELLENDİ: Artık anlık getiriyi de hesaplıyor.
     function showOptions(name, targetElement) {
         currentPortfolioName = name;
         document.querySelectorAll('#portfolio-list li').forEach(li => li.classList.remove('active'));
@@ -153,15 +158,15 @@
         document.getElementById('result-area').style.display = 'none';
         document.getElementById('report-container').style.display = 'none';
         
-        // YENİ: Anlık getiriyi al ve göster
         fetchAndDisplayLiveReturn(name);
     }
     
-    // YENİ: Seçenekler menüsü için anlık getiriyi hesaplayan ve gösteren fonksiyon
     async function fetchAndDisplayLiveReturn(name) {
         const displayDiv = document.getElementById('live-return-display');
+        const noticeDiv = document.getElementById('live-return-notice');
         displayDiv.textContent = 'Anlık getiri hesaplanıyor...';
         displayDiv.className = '';
+        noticeDiv.style.display = 'none'; // Uyarıyı başlangıçta gizle
 
         try {
             const portfolioResponse = await fetch(`/get_portfolio/${name}`);
@@ -185,13 +190,17 @@
             displayDiv.textContent = `${timeString} - ${value >= 0 ? '+' : ''}${value.toFixed(2)}%`;
             displayDiv.className = value >= 0 ? 'positive' : 'negative';
 
+            // YENİ: Uyarıyı doldur ve göster
+            noticeDiv.textContent = 'Getiriler, BIST hisseleri için anlık, fonlar için T+1/T+2 gecikmeli verilerle hesaplanmıştır.';
+            noticeDiv.style.display = 'block';
+
         } catch (error) {
             displayDiv.textContent = 'Getiri hesaplanamadı.';
             displayDiv.className = 'negative';
+            noticeDiv.style.display = 'none';
         }
     }
 
-    // GÜNCELLENDİ: Sabit renkler kullanıyor.
     async function displayPieChartReport(name) {
         document.getElementById('report-title').textContent = `"${name}" Portföy Dağılım Raporu`;
         const response = await fetch(`/get_portfolio/${name}`);
@@ -200,8 +209,9 @@
         
         const labels = assets.map(a => a.ticker);
         const data = assets.map(a => parseFloat(a.weight));
-
-        const ctx = document.getElementById('portfolioPieChart').getContext('2-d');
+        
+        // DÜZELTME: '2-d' yerine '2d' kullanıldı.
+        const ctx = document.getElementById('portfolioPieChart').getContext('2d');
         if(portfolioChart) { portfolioChart.destroy(); }
         
         portfolioChart = new Chart(ctx, {
@@ -211,7 +221,7 @@
                 datasets: [{
                     label: 'Portföy Ağırlığı (%)',
                     data: data,
-                    backgroundColor: generateDeterministicColors(labels), // Rastgele yerine sabit renkler
+                    backgroundColor: generateDeterministicColors(labels),
                     borderColor: '#fff',
                     borderWidth: 1
                 }]
@@ -229,7 +239,6 @@
         document.getElementById('options-container').style.display = 'none';
     }
 
-    // GÜNCELLENDİ: Portföyün toplam getirisini listeleyen eski mantığa geri döndü.
     async function displayHistoricalReturns(name) {
         const resultArea = document.getElementById('result-area');
         const resultContent = document.getElementById('result-content');
@@ -273,7 +282,6 @@
         document.getElementById('options-container').style.display = 'none';
     }
 
-    // GÜNCELLENDİ: Artık geri okunu gösteriyor.
     async function showPortfolioEditor(name) {
         const response = await fetch(`/get_portfolio/${name}`);
         const portfolio = await response.json();
@@ -291,15 +299,105 @@
         document.getElementById('options-container').style.display = 'none';
         document.getElementById('result-area').style.display = 'none';
         document.getElementById('report-container').style.display = 'none';
-        document.getElementById('back-to-options').style.display = 'block'; // Geri okunu göster
+        // YENİ: Düzenleme ekranındaki geri okunu göster
+        document.querySelector('#form-container .back-button').style.display = 'block';
     }
     
-    // (Değişiklik yok)
-    document.getElementById('save-button').addEventListener('click', async function() { /* ... */ });
-    document.getElementById('portfolio-form').addEventListener('submit', async function(event) { /* ... */ });
-    function populateTable(type, data) { /* ... */ }
+    document.getElementById('save-button').addEventListener('click', async function() {
+        const portfolioName = document.getElementById('fund-name').value.trim();
+        if (!portfolioName) { alert('Lütfen kaydetmek için bir portföy adı girin.'); return; }
+        const stocks = Array.from(document.querySelectorAll('#stocks-container .stock-row')).map(r => ({ ticker: r.children[0].value, weight: r.children[1].value, adet: r.children[2].value }));
+        const funds = Array.from(document.querySelectorAll('#funds-container .stock-row')).map(r => ({ ticker: r.children[0].value, weight: r.children[1].value, adet: r.children[2].value }));
+        if (stocks.length === 0 && funds.length === 0) { alert('Lütfen en az bir varlık girin.'); return; }
 
-    // YENİ: Sabit renkler üreten fonksiyon
+        const response = await fetch('/save_portfolio', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: portfolioName, stocks, funds })
+        });
+        const result = await response.json();
+        alert(response.ok ? result.success : 'Hata: ' + result.error);
+        if (response.ok) loadPortfolios();
+    });
+
+    document.getElementById('portfolio-form').addEventListener('submit', async function(event) {
+        event.preventDefault();
+        const resultArea = document.getElementById('result-area');
+        const resultContent = document.getElementById('result-content');
+        const loader = document.getElementById('loader');
+        
+        resultArea.style.display = 'block';
+        resultContent.style.display = 'none';
+        loader.style.display = 'block';
+
+        const stocks = Array.from(document.querySelectorAll('#stocks-container .stock-row')).map(r => ({ ticker: r.children[0].value, weight: r.children[1].value }));
+        const funds = Array.from(document.querySelectorAll('#funds-container .stock-row')).map(r => ({ ticker: r.children[0].value, weight: r.children[1].value }));
+
+        try {
+            const response = await fetch('/calculate', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ stocks, funds })
+            });
+            const result = await response.json();
+            
+            loader.style.display = 'none';
+            resultContent.style.display = 'block';
+            document.getElementById('historical-results-container').style.display = 'none'; 
+            
+            const totalResultDiv = document.getElementById('total-result');
+            document.getElementById('result-title').textContent = "Portföyün Anlık Toplam Getirisi";
+
+            if (response.ok) {
+                const value = result.total_change;
+                totalResultDiv.textContent = `${value >= 0 ? '+' : ''}${value.toFixed(2)}%`;
+                totalResultDiv.className = value >= 0 ? 'positive' : 'negative';
+
+                const stockResults = result.details.filter(d => d.type === 'stock');
+                const fundResults = result.details.filter(d => d.type === 'fund');
+                
+                const stockContainer = document.getElementById('stock-results-container');
+                if (stockResults.length > 0) {
+                    const timeString = new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+                    document.getElementById('stock-title').innerHTML = `Hisse Senetleri <span class="title-meta">(${timeString} itibarıyla - 15 dk gecikmeli veri)</span>`;
+                    populateTable('stock', stockResults);
+                    stockContainer.style.display = 'block';
+                } else { stockContainer.style.display = 'none'; }
+
+                const fundContainer = document.getElementById('fund-results-container');
+                if (fundResults.length > 0) {
+                    const latestDateRange = fundResults[0]?.date_range || 'Tarih Bilgisi Yok';
+                    document.getElementById('fund-title').innerHTML = `Yatırım Fonları <span class="title-meta">(${latestDateRange})</span>`;
+                    populateTable('fund', fundResults);
+                    fundContainer.style.display = 'block';
+                } else { fundContainer.style.display = 'none'; }
+            } else {
+                totalResultDiv.textContent = `Hata: ${result.error}`;
+                totalResultDiv.className = 'negative';
+                document.getElementById('stock-results-container').style.display = 'none';
+                document.getElementById('fund-results-container').style.display = 'none';
+            }
+        } catch (error) {
+            loader.style.display = 'none';
+            resultContent.style.display = 'block';
+            document.getElementById('total-result').textContent = 'Sunucuya bağlanırken bir hata oluştu.';
+        }
+    });
+
+    function populateTable(type, data) {
+        const head = document.getElementById(`${type}-table-head`);
+        const body = document.getElementById(`${type}-table-body`);
+        head.innerHTML = `<tr><th>${type === 'stock' ? 'Hisse' : 'Fon'} Kodu</th><th>Günlük Değişim (%)</th><th>Portföye Etkisi (%)</th></tr>`;
+        body.innerHTML = '';
+        data.forEach(item => {
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>${item.ticker}</td>
+                <td class="${item.daily_change >= 0 ? 'positive' : 'negative'}">${item.daily_change.toFixed(2)}%</td>
+                <td class="${item.weighted_impact >= 0 ? 'positive' : 'negative'}">${item.weighted_impact.toFixed(2)}%</td>
+            `;
+            body.appendChild(row);
+        });
+    }
+
     function generateDeterministicColors(labels) {
         const colors = [];
         for (const label of labels) {
