@@ -37,7 +37,6 @@
         .back-button:hover { color: #2c3e50; }
         #live-return-display { text-align: center; padding: 15px; margin-top: 5px; margin-bottom: 25px; border: 1px solid #ecf0f1; border-radius: 6px; font-size: 1.4em; font-weight: bold; }
         #live-return-notice { font-size: 0.8em; color: #7f8c8d; text-align: center; margin-top: -15px; margin-bottom: 20px; }
-        /* YENİ EKLENEN STİLLER */
         .sidebar-actions { margin-top: 20px; display: flex; flex-direction: column; gap: 10px; }
         .sidebar-actions button { width: 100%; text-align: center; padding: 10px; }
         #btn-new-portfolio { background-color: #3498db !important; }
@@ -54,8 +53,8 @@
         <h2>Kaydedilmiş Portföyler</h2>
         <ul id="portfolio-list"></ul>
         <div class="sidebar-actions">
-            <button id="btn-new-portfolio">Fon Ekle</button>
-            <button id="btn-delete-mode">Fonu Sil</button>
+            <button id="btn-new-portfolio">Yeni Portföy Ekle</button>
+            <button id="btn-delete-mode">Portföyü Sil</button>
         </div>
     </div>
     <div class="content">
@@ -77,7 +76,7 @@
         <div class="container" id="form-container" style="display: block;">
             <a href="#" class="back-button" title="Seçeneklere Geri Dön" style="display: none;">&larr;</a>
             <form id="portfolio-form">
-                <div class="form-group"><label for="fund-name">Portföy Adı</label><input type="text" id="fund-name" placeholder="Yeni Portföy Adı" required></div>
+                <div class="form-group"><label for="portfolio-name">Portföy Adı</label><input type="text" id="portfolio-name" placeholder="Yeni Portföy Adı" required></div>
                 <h3>Hisse Senetleri</h3><div id="stocks-container"></div>
                 <button type="button" class="btn-add" onclick="addAsset('stock')">Yeni Hisse Ekle</button>
                 <h3>Yatırım Fonları</h3><div id="funds-container"></div>
@@ -94,7 +93,9 @@
                 <h2 id="result-title"></h2><div id="total-result"></div>
                 <div id="stock-results-container" style="display:none; text-align:left;"></div>
                 <div id="fund-results-container" style="display:none; text-align:left;"></div>
-                <div id="historical-results-container" style="display:none; text-align:left;"></div>
+                <div id="historical-results-container" style="display:none; text-align:left; width: 95%; margin: auto;">
+                    <canvas id="historicalLineChart"></canvas>
+                </div>
             </div>
         </div>
     </div>
@@ -103,7 +104,8 @@
 <script>
     let currentPortfolioName = null;
     let portfolioChart = null;
-    let isDeleteMode = false; // YENİ: Silme modu için global değişken
+    let historicalChart = null; // YENİ: Tarihsel grafik için değişken
+    let isDeleteMode = false;
 
     document.addEventListener('DOMContentLoaded', () => { 
         loadPortfolios(); 
@@ -116,12 +118,11 @@
                 }
             };
         });
-        // YENİ EVENT LISTENERS
         document.getElementById('btn-new-portfolio').addEventListener('click', showNewPortfolioForm);
         document.getElementById('btn-delete-mode').addEventListener('click', toggleDeleteMode);
+        document.getElementById('portfolio-form').addEventListener('submit', handleCalculate);
     });
     
-    // YENİ FONKSİYONLAR
     function toggleDeleteMode() {
         isDeleteMode = !isDeleteMode;
         const deleteButton = document.getElementById('btn-delete-mode');
@@ -134,21 +135,23 @@
             alert('Silme modu aktif. Silmek istediğiniz portföyü listeden seçin.');
         } else {
             deleteButton.classList.remove('active');
-            deleteButton.textContent = 'Fonu Sil';
+            // GÜNCELLENDİ: İsimlendirme tutarlılığı
+            deleteButton.textContent = 'Portföyü Sil';
             body.classList.remove('delete-mode-active');
         }
     }
 
     function showNewPortfolioForm() {
-        if(isDeleteMode) toggleDeleteMode(); // Silme modundaysa çık
+        if(isDeleteMode) toggleDeleteMode();
         currentPortfolioName = null;
         document.querySelectorAll('#portfolio-list li').forEach(li => li.classList.remove('active'));
-        document.getElementById('fund-name').value = '';
+        document.getElementById('portfolio-name').value = '';
         document.getElementById('stocks-container').innerHTML = '';
         document.getElementById('funds-container').innerHTML = '';
         ['options-container', 'result-area', 'report-container'].forEach(id => document.getElementById(id).style.display = 'none');
         document.getElementById('form-container').style.display = 'block';
         document.querySelector('#form-container .back-button').style.display = 'none';
+        document.getElementById('result-area').style.display = 'none';
     }
     
     async function deletePortfolio(name) {
@@ -163,6 +166,7 @@
                 if (response.ok) {
                     alert(result.success);
                     loadPortfolios();
+                    showNewPortfolioForm();
                 } else { throw new Error(result.error); }
             } catch (error) {
                 alert('Portföy silinirken bir hata oluştu: ' + error.message);
@@ -170,7 +174,6 @@
         }
     }
 
-    // GÜNCELLENMİŞ FONKSİYONLAR
     async function loadPortfolios() {
         const response = await fetch('/get_portfolios');
         const portfolioNames = await response.json();
@@ -190,7 +193,6 @@
         });
     }
     
-    // Değişiklik olmayan diğer tüm fonksiyonlar...
     function addAsset(type, ticker = '', weight = '', adet = '') {
         const container = document.getElementById(type === 'stock' ? 'stocks-container' : 'funds-container');
         const newRow = document.createElement('div');
@@ -198,7 +200,7 @@
         newRow.innerHTML = `
             <input type="text" placeholder="${type === 'stock' ? 'Hisse Kodu (örn: EREGL)' : 'Fon Kodu (örn: AFT)'}" value="${ticker}" required>
             <input type="number" placeholder="Ağırlık (%)" value="${weight}" min="0.01" step="0.01" required>
-            <input type="number" placeholder="Adet (Not)" value="${adet}" min="0" step="1">
+            <input type="number" placeholder="Adet (Opsiyonel)" value="${adet}" min="0" step="1">
             <button type="button" class="btn-remove" onclick="this.parentElement.remove()">X</button>
         `;
         container.appendChild(newRow);
@@ -220,6 +222,7 @@
     }
     
     async function fetchAndDisplayLiveReturn(name) {
+        // Bu fonksiyonda değişiklik yok
         const displayDiv = document.getElementById('live-return-display');
         const noticeDiv = document.getElementById('live-return-notice');
         displayDiv.textContent = 'Anlık getiri hesaplanıyor...';
@@ -240,7 +243,8 @@
                 const timeString = now.toLocaleDateString('tr-TR', { day: '2-digit', month: '2-digit', year: 'numeric' }) + ' ' + now.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
                 displayDiv.textContent = `${timeString} - ${value >= 0 ? '+' : ''}${value.toFixed(2)}%`;
                 displayDiv.className = value >= 0 ? 'positive' : 'negative';
-                noticeDiv.textContent = 'Getiriler hisselere göre hesaplanmıştır';
+                const hasFunds = result.details.some(d => d.type === 'fund' && d.date_range && d.date_range !== "Yetersiz Veri");
+                noticeDiv.textContent = hasFunds ? 'Getiriler, fonlar için bir önceki günün, hisseler için anlık kapanış verilerine göre hesaplanmıştır.' : 'Getiriler anlık hisse senedi kapanış verilerine göre hesaplanmıştır.';
                 noticeDiv.style.display = 'block';
             } else { throw new Error(result.error); }
         } catch (error) {
@@ -251,6 +255,7 @@
     }
 
     async function displayPieChartReport(name) {
+        // Bu fonksiyonda değişiklik yok
         document.getElementById('report-title').textContent = `"${name}" Portföy Dağılım Raporu`;
         const response = await fetch(`/get_portfolio/${name}`);
         const portfolio = await response.json();
@@ -264,14 +269,78 @@
         document.getElementById('options-container').style.display = 'none';
     }
 
+    // YENİ: TAMAMEN YENİDEN YAZILMIŞ FONKSİYON
     async function displayHistoricalReturns(name) {
-        // ... bu fonksiyon değişmedi ...
+        showResultArea(true);
+        document.getElementById('historical-results-container').style.display = 'block';
+        document.getElementById('result-title').textContent = `"${name}" Portföyü - Son 30 Günlük Getiri Hesaplanıyor...`;
+
+        try {
+            const response = await fetch(`/calculate_historical/${name}`);
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.error || 'Bilinmeyen bir hata oluştu.');
+            }
+            
+            document.getElementById('loader').style.display = 'none';
+            document.getElementById('result-content').style.display = 'block';
+            document.getElementById('result-title').textContent = `"${name}" Portföyü - Son 30 Günlük Getiri Grafiği`;
+
+            const ctx = document.getElementById('historicalLineChart').getContext('2d');
+            if (historicalChart) {
+                historicalChart.destroy();
+            }
+
+            historicalChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: data.dates,
+                    datasets: [{
+                        label: 'Günlük Portföy Getirisi (%)',
+                        data: data.returns,
+                        borderColor: 'rgb(54, 162, 235)',
+                        backgroundColor: 'rgba(54, 162, 235, 0.5)',
+                        borderWidth: 2,
+                        tension: 0.1,
+                        pointBackgroundColor: data.returns.map(v => v >= 0 ? '#27ae60' : '#c0392b')
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: (context) => `Getiri: ${context.raw.toFixed(2)}%`
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            title: { display: true, text: 'Günlük Getiri (%)' }
+                        },
+                        x: {
+                             title: { display: true, text: 'Tarih' }
+                        }
+                    }
+                }
+            });
+
+        } catch (error) {
+            document.getElementById('loader').style.display = 'none';
+            document.getElementById('result-content').style.display = 'block';
+            document.getElementById('total-result').innerHTML = `<span class="negative">Hata: ${error.message}</span>`;
+            document.getElementById('historical-results-container').style.display = 'none';
+        }
     }
 
+
     async function showPortfolioEditor(name) {
+        // Bu fonksiyonda değişiklik yok
         const response = await fetch(`/get_portfolio/${name}`);
         const portfolio = await response.json();
-        document.getElementById('fund-name').value = portfolio.name;
+        document.getElementById('portfolio-name').value = portfolio.name;
         const stocksContainer = document.getElementById('stocks-container');
         stocksContainer.innerHTML = '';
         (portfolio.stocks || []).forEach(s => addAsset('stock', s.ticker, s.weight, s.adet));
@@ -284,21 +353,30 @@
     }
     
     document.getElementById('save-button').addEventListener('click', async function() {
-        const portfolioName = document.getElementById('fund-name').value.trim();
+        // Bu fonksiyonda değişiklik yok
+        const portfolioName = document.getElementById('portfolio-name').value.trim();
         if (!portfolioName) { alert('Lütfen bir portföy adı girin.'); return; }
-        const stocks = Array.from(document.querySelectorAll('#stocks-container .stock-row')).map(r => ({ ticker: r.children[0].value, weight: r.children[1].value, adet: r.children[2].value }));
-        const funds = Array.from(document.querySelectorAll('#funds-container .stock-row')).map(r => ({ ticker: r.children[0].value, weight: r.children[1].value, adet: r.children[2].value }));
+        const stocks = Array.from(document.querySelectorAll('#stocks-container .stock-row')).map(r => ({ ticker: r.children[0].value.trim().toUpperCase(), weight: r.children[1].value, adet: r.children[2].value }));
+        const funds = Array.from(document.querySelectorAll('#funds-container .stock-row')).map(r => ({ ticker: r.children[0].value.trim().toUpperCase(), weight: r.children[1].value, adet: r.children[2].value }));
         if (stocks.length === 0 && funds.length === 0) { alert('Lütfen en az bir varlık girin.'); return; }
+        
+        const totalWeight = [...stocks, ...funds].reduce((sum, asset) => sum + parseFloat(asset.weight || 0), 0);
+        if (Math.abs(totalWeight - 100) > 0.01) {
+            if (!confirm(`Toplam ağırlık ${totalWeight.toFixed(2)}%. 100% değil. Yine de kaydetmek istiyor musunuz?`)) return;
+        }
+
         const response = await fetch('/save_portfolio', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: portfolioName, stocks, funds }) });
         const result = await response.json();
         alert(response.ok ? result.success : 'Hata: ' + result.error);
         if (response.ok) {
             loadPortfolios();
-            showNewPortfolioForm(); // Kaydettikten sonra formu temizle
+            showNewPortfolioForm();
         }
     });
 
+    // Yardımcı Fonksiyonlar
     function generateDeterministicColors(labels) {
+        // Bu fonksiyonda değişiklik yok
         const colors = [];
         for (const label of labels) {
             let hash = 0;
@@ -308,6 +386,50 @@
             colors.push(`hsl(${hash % 360}, 75%, 60%)`);
         }
         return colors;
+    }
+
+    function showResultArea(isLoading) {
+        document.getElementById('options-container').style.display = 'none';
+        document.getElementById('report-container').style.display = 'none';
+        document.getElementById('form-container').style.display = 'none';
+        document.getElementById('result-area').style.display = 'block';
+        
+        document.getElementById('total-result').innerHTML = '';
+        document.getElementById('stock-results-container').style.display = 'none';
+        document.getElementById('fund-results-container').style.display = 'none';
+        document.getElementById('historical-results-container').style.display = 'none';
+
+        if (isLoading) {
+            document.getElementById('loader').style.display = 'block';
+            document.getElementById('result-content').style.display = 'none';
+        } else {
+            document.getElementById('loader').style.display = 'none';
+            document.getElementById('result-content').style.display = 'block';
+        }
+    }
+
+    async function handleCalculate(event) {
+        // Bu fonksiyonda değişiklik yok
+        event.preventDefault();
+        showResultArea(true);
+        const stocks = Array.from(document.querySelectorAll('#stocks-container .stock-row')).map(r => ({ ticker: r.children[0].value, weight: r.children[1].value }));
+        const funds = Array.from(document.querySelectorAll('#funds-container .stock-row')).map(r => ({ ticker: r.children[0].value, weight: r.children[1].value }));
+        
+        try {
+            const response = await fetch('/calculate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ stocks, funds }) });
+            const result = await response.json();
+            if (!response.ok) throw new Error(result.error);
+            showResultArea(false);
+
+            document.getElementById('result-title').textContent = "Anlık Portföy Getiri Analizi";
+            const totalResultDiv = document.getElementById('total-result');
+            totalResultDiv.textContent = `${result.total_change >= 0 ? '+' : ''}${result.total_change.toFixed(2)}%`;
+            totalResultDiv.className = result.total_change >= 0 ? 'positive' : 'negative';
+
+        } catch (error) {
+            showResultArea(false);
+            document.getElementById('total-result').innerHTML = `<span class="negative">Hata: ${error.message}</span>`;
+        }
     }
 </script>
 </body>
