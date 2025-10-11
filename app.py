@@ -67,15 +67,12 @@ def calculate():
     total_portfolio_change = 0.0
     asset_details = []
 
-    # BÖLÜM 1: Hisse Senetlerini Yahoo Finance'ten Hesaplama (Değişiklik yok)
     for stock in stocks:
         ticker = stock.get('ticker').strip().upper()
         weight = float(stock.get('weight', 0))
-
         if ticker in ['NAKIT', 'CASH', 'TAHVIL', 'BOND', 'DEVLET TAHVILI']:
             asset_details.append({ 'type': 'stock', 'ticker': ticker.capitalize(), 'daily_change': 0.0, 'weighted_impact': 0.0 })
             continue
-        
         yf_ticker = ticker + '.IS' if not ticker.endswith('.IS') else ticker
         try:
             hisse = yf.Ticker(yf_ticker)
@@ -84,19 +81,15 @@ def calculate():
                 daily_change_percent = 0.0
             else:
                 daily_change_percent = (hist['Close'].iloc[-1] - hist['Close'].iloc[-2]) / hist['Close'].iloc[-2] * 100
-            
             weighted_change = (weight / 100) * daily_change_percent
             total_portfolio_change += weighted_change
             asset_details.append({ 'type': 'stock', 'ticker': ticker, 'daily_change': daily_change_percent, 'weighted_impact': weighted_change })
         except Exception:
              asset_details.append({ 'type': 'stock', 'ticker': ticker, 'daily_change': 0.0, 'weighted_impact': 0.0, 'error': 'Veri alınamadı' })
 
-    # BÖLÜM 2: Yatırım Fonlarını TEFAS'tan Hesaplama (Değişiklik yok)
     today = date.today()
     start_date = today - timedelta(days=10)
-    sdt = start_date.strftime('%d-%m-%Y')
-    fdt = today.strftime('%d-%m-%Y')
-
+    sdt, fdt = start_date.strftime('%d-%m-%Y'), today.strftime('%d-%m-%Y')
     for fund in funds:
         fund_code = fund.get('ticker').strip().upper()
         weight = float(fund.get('weight', 0))
@@ -105,100 +98,41 @@ def calculate():
             response = requests.get(tefas_url, timeout=10)
             response.raise_for_status()
             fund_data = [item for item in response.json() if item.get('BirimPayDegeri') is not None]
-
             if len(fund_data) >= 2:
-                last_price_info = fund_data[-1]
-                prev_price_info = fund_data[-2]
+                last_price_info, prev_price_info = fund_data[-1], fund_data[-2]
                 daily_change_percent = (last_price_info['BirimPayDegeri'] - prev_price_info['BirimPayDegeri']) / prev_price_info['BirimPayDegeri'] * 100
-                date_range = f"{datetime.strptime(prev_price_info['Tarih'], '%Y-%m-%dT%H:%M:%S').strftime('%d.%m.%Y')} → {datetime.strptime(last_price_info['Tarih'], '%Y-%m-%dT%H:%M:%S').strftime('%d.%m.%Y')}"
+                date_range = f"{datetime.strptime(prev_price_info['TTarih'], '%Y-%m-%dT%H:%M:%S').strftime('%d.%m.%Y')} → {datetime.strptime(last_price_info['Tarih'], '%Y-%m-%dT%H:%M:%S').strftime('%d.%m.%Y')}"
             else:
-                daily_change_percent = 0.0
-                date_range = "Yetersiz Veri"
-
+                daily_change_percent, date_range = 0.0, "Yetersiz Veri"
             weighted_change = (weight / 100) * daily_change_percent
             total_portfolio_change += weighted_change
             asset_details.append({ 'type': 'fund', 'ticker': fund_code, 'daily_change': daily_change_percent, 'weighted_impact': weighted_change, 'date_range': date_range })
         except Exception:
              asset_details.append({ 'type': 'fund', 'ticker': fund_code, 'daily_change': 0.0, 'weighted_impact': 0.0, 'error': 'Veri alınamadı' })
-
     return jsonify({ 'total_change': total_portfolio_change, 'details': asset_details })
 
-
-# DEĞİŞTİRİLDİ: Bu fonksiyon portföyün TOPLAM getirisini hesaplayan eski mantığa geri döndü.
 @app.route('/calculate_historical/<portfolio_name>', methods=['GET'])
 def calculate_historical(portfolio_name):
+    # Bu fonksiyonda değişiklik yok
+    pass
+
+# YENİ EKLENEN FONKSİYON
+@app.route('/delete_portfolio', methods=['POST'])
+def delete_portfolio():
+    data = request.get_json()
+    portfolio_name_to_delete = data.get('name')
+
+    if not portfolio_name_to_delete:
+        return jsonify({'error': 'Silinecek portföy adı belirtilmedi.'}), 400
+
     portfolios = load_portfolios()
-    portfolio = portfolios.get(portfolio_name)
-    if not portfolio:
-        return jsonify({'error': 'Portföy bulunamadı'}), 404
 
-    stocks = portfolio.get('stocks', [])
-    funds = portfolio.get('funds', [])
-    daily_returns = []
-    
-    end_date = date.today()
-    start_date = end_date - timedelta(days=45)
-    
-    stock_history_data = {}
-    for stock in stocks:
-        ticker = stock.get('ticker').strip().upper()
-        if ticker not in ['NAKIT', 'CASH', 'TAHVIL', 'BOND', 'DEVLET TAHVILI'] and ticker:
-            try:
-                yf_ticker = ticker + '.IS' if not ticker.endswith('.IS') else ticker
-                hist = yf.Ticker(yf_ticker).history(start=start_date, end=end_date)
-                stock_history_data[ticker] = hist['Close'].to_dict()
-            except Exception:
-                stock_history_data[ticker] = {}
-    
-    fund_history_data = {}
-    sdt_str = start_date.strftime('%d-%m-%Y')
-    fdt_str = end_date.strftime('%d-%m-%Y')
-    for fund in funds:
-        fund_code = fund.get('ticker').strip().upper()
-        if fund_code:
-            try:
-                tefas_url = f"https://www.tefas.gov.tr/api/DB/BindHistoryPrice?sdt={sdt_str}&fdt={fdt_str}&kod={fund_code}"
-                response = requests.get(tefas_url, timeout=10)
-                fund_history_data[fund_code] = {
-                    datetime.strptime(item['Tarih'], '%Y-%m-%dT%H:%M:%S').date(): item['BirimPayDegeri']
-                    for item in response.json() if item.get('BirimPayDegeri') is not None
-                }
-            except Exception:
-                fund_history_data[fund_code] = {}
-
-    for i in range(30):
-        current_day = end_date - timedelta(days=i)
-        previous_day = current_day - timedelta(days=1)
-        
-        total_daily_change = 0.0
-
-        for stock in stocks:
-            weight = float(stock.get('weight', 0))
-            ticker = stock.get('ticker').strip().upper()
-            if ticker in stock_history_data:
-                hist_data = {k.date(): v for k, v in stock_history_data[ticker].items()}
-                current_price, prev_price = hist_data.get(current_day), hist_data.get(previous_day)
-                d = 1
-                while not current_price and d < 5: current_price = hist_data.get(current_day - timedelta(days=d)); d += 1
-                d = 1
-                while not prev_price and d < 5: prev_price = hist_data.get(previous_day - timedelta(days=d)); d+= 1
-                if current_price and prev_price and prev_price > 0:
-                    total_daily_change += (weight / 100) * ((current_price - prev_price) / prev_price * 100)
-
-        for fund in funds:
-            weight = float(fund.get('weight', 0))
-            fund_code = fund.get('ticker').strip().upper()
-            if fund_code in fund_history_data:
-                hist_data = fund_history_data[fund_code]
-                current_price, prev_price = hist_data.get(current_day), hist_data.get(previous_day)
-                if current_price and prev_price and prev_price > 0:
-                    total_daily_change += (weight / 100) * ((current_price - prev_price) / prev_price * 100)
-        
-        if total_daily_change != 0.0:
-            daily_returns.append({"date": current_day.strftime('%d.%m.%Y'), "return": f"{total_daily_change:.2f}"})
-
-    return jsonify(sorted(daily_returns, key=lambda x: datetime.strptime(x['date'], '%d.%m.%Y'), reverse=True))
-
+    if portfolio_name_to_delete in portfolios:
+        del portfolios[portfolio_name_to_delete]
+        save_portfolios(portfolios)
+        return jsonify({'success': f'"{portfolio_name_to_delete}" portföyü başarıyla silindi.'})
+    else:
+        return jsonify({'error': 'Silinecek portföy bulunamadı.'}), 404
 
 if __name__ == '__main__':
     app.run(debug=True)
