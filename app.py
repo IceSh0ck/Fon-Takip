@@ -125,7 +125,7 @@ def calculate():
         except Exception: asset_details.append({'type': 'fund', 'ticker': fund_code, 'daily_change': 0.0, 'weighted_impact': 0.0, 'error': 'Veri alınamadı'})
     return jsonify({'total_change': total_portfolio_change, 'details': asset_details})
 
-# --- BU FONKSİYON NİHAİ OLARAK DÜZELTİLDİ ---
+# --- BU FONKSİYON NİHAİ OLARAK DÜZELTİLDİ VE ÇOKLU FON DESTEĞİ EKLENDİ ---
 @app.route('/calculate_historical/<portfolio_name>', methods=['GET'])
 def calculate_historical(portfolio_name):
     portfolios = load_portfolios()
@@ -153,8 +153,9 @@ def calculate_historical(portfolio_name):
             print(f"Hisse senedi verisi alınırken hata: {e}")
 
     # Adım 2: Fon verilerini çek
+    funds_in_portfolio = portfolio.get('funds', [])
     sdt_str, fdt_str = start_date.strftime('%d-%m-%Y'), end_date.strftime('%d-%m-%Y')
-    for fund in portfolio.get('funds', []):
+    for fund in funds_in_portfolio:
         fund_code = fund['ticker'].strip().upper()
         try:
             res = requests.get(f"https://www.tefas.gov.tr/api/DB/BindHistoryPrice?sdt={sdt_str}&fdt={fdt_str}&kod={fund_code}", timeout=10)
@@ -168,8 +169,6 @@ def calculate_historical(portfolio_name):
     
     if asset_prices_df.empty: return jsonify({'error': 'Tarihsel veri bulunamadı.'}), 400
     
-    # DÜZELTME: Sütun isimlerindeki '.IS' uzantısını kaldırarak isimleri eşleştir.
-    # Bu, hatanın ana kaynağıydı.
     asset_prices_df.columns = asset_prices_df.columns.str.replace('.IS', '', regex=False)
     
     # Adım 3: Getirileri hesapla
@@ -177,18 +176,32 @@ def calculate_historical(portfolio_name):
     daily_returns = asset_prices_df.pct_change()
 
     weights_dict = {asset['ticker'].strip().upper(): float(asset['weight']) / 100 for asset in all_assets}
-    
-    # Ağırlık serisini DataFrame sütunlarıyla eşleştir
     aligned_weights = pd.Series(weights_dict).reindex(daily_returns.columns).fillna(0)
-
+    
+    # Ana portföyün ağırlıklı günlük getirisini hesapla
     portfolio_daily_returns = (daily_returns * aligned_weights).sum(axis=1) * 100
     valid_returns = portfolio_daily_returns.dropna()
     
-    # Son 30 günü al ve döndür
+    # Son 30 günü al
     dates = valid_returns.index.strftime('%d.%m.%Y').tolist()[-30:]
     returns = valid_returns.tolist()[-30:]
     
-    return jsonify({'dates': dates, 'returns': returns})
+    # YENİ: Portföydeki HER BİR FON için bireysel getiri verilerini hazırla
+    individual_fund_returns_data = {}
+    fund_tickers = [f['ticker'].strip().upper() for f in funds_in_portfolio]
+    
+    for fund_code in fund_tickers:
+        if fund_code in daily_returns.columns:
+            # Ana portföy getirisiyle aynı tarih aralığına sahip olduğundan emin ol
+            fund_series = (daily_returns[fund_code] * 100).reindex(valid_returns.index)
+            individual_fund_returns_data[fund_code] = fund_series.tolist()[-30:]
+
+    # DEĞİŞTİRİLDİ: Yanıta 'individual_fund_returns' sözlüğünü ekle
+    return jsonify({
+        'dates': dates, 
+        'returns': returns,
+        'individual_fund_returns': individual_fund_returns_data
+    })
 
 @app.route('/compare_versions/<portfolio_name>', methods=['GET'])
 def compare_versions(portfolio_name):
