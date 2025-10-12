@@ -13,7 +13,6 @@
         .container { background: #fff; padding: 30px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); margin-bottom: 20px; position: relative; }
         h1, h2, h3 { color: #2c3e50; }
         h3 { border-bottom: 2px solid #ecf0f1; padding-bottom: 10px; margin-top: 25px; }
-        .title-meta { font-size: 0.8em; color: #7f8c8d; font-weight: normal; margin-left: 10px; }
         .stock-row { display: grid; grid-template-columns: 2fr 1fr 1fr auto; gap: 10px; margin-bottom: 10px; align-items: center; }
         input[type="text"], input[type="number"] { width: calc(100% - 22px); padding: 10px; border: 1px solid #ccc; border-radius: 4px; }
         button { background-color: #3498db; color: white; padding: 12px 20px; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; transition: background-color 0.3s; }
@@ -39,13 +38,16 @@
         #live-return-display { text-align: center; padding: 15px; margin-top: 5px; margin-bottom: 25px; border: 1px solid #ecf0f1; border-radius: 6px; font-size: 1.4em; font-weight: bold; }
         #live-return-notice { font-size: 0.8em; color: #7f8c8d; text-align: center; margin-top: -15px; margin-bottom: 20px; }
         .sidebar-actions { margin-top: 20px; display: flex; flex-direction: column; gap: 10px; }
-        .sidebar-actions button { width: 100%; text-align: center; padding: 10px; }
-        #btn-new-portfolio { background-color: #3498db !important; }
-        #btn-new-portfolio:hover { background-color: #2980b9 !important; }
-        #btn-delete-mode { background-color: #e74c3c !important; }
-        #btn-delete-mode:hover { background-color: #c0392b !important; }
+        #btn-new-portfolio, #btn-delete-mode { width: 100%; text-align: center; padding: 10px; }
+        #btn-new-portfolio { background-color: #3498db !important; } #btn-new-portfolio:hover { background-color: #2980b9 !important; }
+        #btn-delete-mode { background-color: #e74c3c !important; } #btn-delete-mode:hover { background-color: #c0392b !important; }
         #btn-delete-mode.active { background-color: #c0392b !important; border: 2px solid #2c3e50; }
         body.delete-mode-active #portfolio-list li:hover { background-color: #f5b7b1; text-decoration: line-through; }
+        .chart-annotation-container { position: relative; width: 100%; height: 450px; }
+        .chart-annotation { position: absolute; top: 10px; right: 10px; background-color: rgba(255, 255, 255, 0.85); border: 1px solid #ddd; padding: 8px 12px; border-radius: 6px; font-size: 12px; color: #555; z-index: 10; pointer-events: none; }
+        .chart-annotation strong { display: block; margin-bottom: 5px; color: #333; font-size: 13px; }
+        .chart-annotation div { margin-bottom: 4px; }
+        .chart-annotation .color-box { display: inline-block; width: 12px; height: 12px; margin-right: 6px; border: 1px solid rgba(0,0,0,0.2); vertical-align: middle; }
     </style>
 </head>
 <body>
@@ -78,8 +80,7 @@
         <div class="container" id="comparison-container" style="display: none;">
             <a href="#" class="back-button" title="Seçeneklere Geri Dön">&larr;</a>
             <h2 id="comparison-title" style="text-align:center;"></h2>
-            <div id="comparison-table-container">
-            </div>
+            <div id="comparison-table-container"></div>
         </div>
         <div class="container" id="form-container" style="display: block;">
             <a href="#" class="back-button" title="Seçeneklere Geri Dön" style="display: none;">&larr;</a>
@@ -98,11 +99,13 @@
             <a href="#" class="back-button" title="Seçeneklere Geri Dön">&larr;</a>
             <div class="loader" id="loader"></div>
             <div id="result-content" style="display: none;">
-                <h2 id="result-title"></h2><div id="total-result"></div>
-                <div id="stock-results-container" style="display:none; text-align:left;"></div>
-                <div id="fund-results-container" style="display:none; text-align:left;"></div>
-                <div id="historical-results-container" style="display:none; text-align:left; width: 95%; margin: auto;">
-                    <canvas id="historicalLineChart"></canvas>
+                <h2 id="result-title"></h2>
+                <div id="total-result"></div>
+                <div id="historical-results-container" style="display:none; width: 98%; margin: auto;">
+                    <div class="chart-annotation-container">
+                        <canvas id="historicalLineChart"></canvas>
+                        <div id="chart-notes" class="chart-annotation" style="display: none;"></div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -134,17 +137,16 @@
     function toggleDeleteMode() {
         isDeleteMode = !isDeleteMode;
         const deleteButton = document.getElementById('btn-delete-mode');
-        const body = document.body;
         if (isDeleteMode) {
             deleteButton.classList.add('active');
             deleteButton.textContent = 'Silme Modundan Çık';
-            body.classList.add('delete-mode-active');
+            document.body.classList.add('delete-mode-active');
             ['options-container', 'form-container', 'result-area', 'report-container', 'comparison-container'].forEach(id => document.getElementById(id).style.display = 'none');
             alert('Silme modu aktif. Silmek istediğiniz portföyü listeden seçin.');
         } else {
             deleteButton.classList.remove('active');
             deleteButton.textContent = 'Portföyü Sil';
-            body.classList.remove('delete-mode-active');
+            document.body.classList.remove('delete-mode-active');
         }
     }
 
@@ -189,13 +191,10 @@
         portfolioNames.forEach(name => {
             const li = document.createElement('li');
             li.textContent = name;
-            li.dataset.name = name; // Tıklama için referans
+            li.dataset.name = name;
             li.onclick = (event) => {
-                if (isDeleteMode) {
-                    deletePortfolio(name);
-                } else {
-                    showOptions(name, event.currentTarget);
-                }
+                if (isDeleteMode) deletePortfolio(name);
+                else showOptions(name, event.currentTarget);
             };
             listElement.appendChild(li);
         });
@@ -208,7 +207,7 @@
         newRow.innerHTML = `
             <input type="text" placeholder="${type === 'stock' ? 'Hisse Kodu (örn: EREGL)' : 'Fon Kodu (örn: AFT)'}" value="${ticker}" required>
             <input type="number" placeholder="Ağırlık (%)" value="${weight}" min="0.01" step="0.01" required>
-            <input type="number" placeholder="Adet (Opsiyonel)" value="${adet}" min="0" step="1">
+            <input type="number" placeholder="Adet (Opsiyonel)" value="${adet}" min="0">
             <button type="button" class="btn-remove" onclick="this.parentElement.remove()">X</button>
         `;
         container.appendChild(newRow);
@@ -220,13 +219,11 @@
         if(targetElement) targetElement.classList.add('active');
         document.getElementById('options-title').textContent = `"${name}" Portföyü İçin İşlem Seçin`;
         
-        // Buton olaylarını ata
         document.getElementById('btn-show-report').onclick = () => displayPieChartReport(name);
         document.getElementById('btn-show-comparison').onclick = () => displayWeightChangeReport(name);
         document.getElementById('btn-show-historical').onclick = () => displayHistoricalReturns(name);
         document.getElementById('btn-edit-portfolio').onclick = () => showPortfolioEditor(name);
 
-        // İlgili panelleri göster/gizle
         ['form-container', 'result-area', 'report-container', 'comparison-container'].forEach(id => document.getElementById(id).style.display = 'none');
         document.getElementById('options-container').style.display = 'block';
 
@@ -261,12 +258,10 @@
         } catch (error) {
             displayDiv.textContent = `Hata: ${error.message || 'Getiri hesaplanamadı.'}`;
             displayDiv.className = 'negative';
-            noticeDiv.style.display = 'none';
         }
     }
 
     async function displayPieChartReport(name) {
-        // ... bu fonksiyonda değişiklik yok ...
         document.getElementById('report-title').textContent = `"${name}" Portföy Dağılım Raporu`;
         const response = await fetch(`/get_portfolio/${name}`);
         const portfolio = await response.json();
@@ -274,8 +269,8 @@
         const labels = assets.map(a => a.ticker);
         const data = assets.map(a => parseFloat(a.weight));
         const ctx = document.getElementById('portfolioPieChart').getContext('2d');
-        if(portfolioChart) { portfolioChart.destroy(); }
-        portfolioChart = new Chart(ctx, { type: 'pie', data: { labels: labels, datasets: [{ label: 'Portföy Ağırlığı (%)', data: data, backgroundColor: generateDeterministicColors(labels), borderColor: '#fff', borderWidth: 1 }] }, options: { responsive: true, plugins: { legend: { position: 'top' }, tooltip: { callbacks: { label: (context) => `${context.label}: ${context.raw.toFixed(2)}%` } } } } });
+        if(portfolioChart) portfolioChart.destroy();
+        portfolioChart = new Chart(ctx, { type: 'pie', data: { labels, datasets: [{ data, backgroundColor: generateDeterministicColors(labels), borderColor: '#fff', borderWidth: 1 }] }, options: { responsive: true, plugins: { legend: { position: 'top' }, tooltip: { callbacks: { label: (c) => `${c.label}: ${c.raw.toFixed(2)}%` } } } } });
         document.getElementById('report-container').style.display = 'block';
         ['options-container', 'form-container', 'result-area', 'comparison-container'].forEach(id => document.getElementById(id).style.display = 'none');
     }
@@ -292,49 +287,17 @@
         try {
             const response = await fetch(`/compare_versions/${name}`);
             const data = await response.json();
-
-            if (!response.ok) {
-                throw new Error(data.error || 'Bilinmeyen bir hata oluştu.');
-            }
-
+            if (!response.ok) throw new Error(data.error || 'Bilinmeyen bir hata oluştu.');
             title.textContent = `"${name}" Portföy Ağırlık Değişim Raporu`;
-
-            let tableHTML = `
-                <table class="detail-table">
-                    <thead>
-                        <tr>
-                            <th>Varlık Kodu</th>
-                            <th>Önceki Ağırlık (% - ${data.previous_date_str})</th>
-                            <th>Güncel Ağırlık (% - ${data.current_date_str})</th>
-                            <th>Değişim (%)</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-            `;
-
+            let tableHTML = `<table class="detail-table"><thead><tr><th>Varlık Kodu</th><th>Önceki Ağırlık (% - ${data.previous_date_str})</th><th>Güncel Ağırlık (% - ${data.current_date_str})</th><th>Değişim (%)</th></tr></thead><tbody>`;
             data.comparison.forEach(asset => {
-                let changeClass = '';
-                if (asset.change > 0.001) changeClass = 'positive';
-                if (asset.change < -0.001) changeClass = 'negative';
+                let changeClass = asset.change > 0.001 ? 'positive' : (asset.change < -0.001 ? 'negative' : '');
                 const changeSign = asset.change > 0 ? '+' : '';
-
-                tableHTML += `
-                    <tr>
-                        <td>${asset.ticker}</td>
-                        <td>${asset.previous_weight.toFixed(2)}%</td>
-                        <td>${asset.current_weight.toFixed(2)}%</td>
-                        <td class="${changeClass}">${changeSign}${asset.change.toFixed(2)}%</td>
-                    </tr>
-                `;
+                tableHTML += `<tr><td>${asset.ticker}</td><td>${asset.previous_weight.toFixed(2)}%</td><td>${asset.current_weight.toFixed(2)}%</td><td class="${changeClass}">${changeSign}${asset.change.toFixed(2)}%</td></tr>`;
             });
-            tableHTML += '</tbody></table>';
-            
-            tableHTML += `<button type="button" class="btn-revert" id="revert-button">Son Değişikliği Geri Al</button>`;
-            
+            tableHTML += '</tbody></table><button type="button" class="btn-revert" id="revert-button">Son Değişikliği Geri Al</button>';
             tableContainer.innerHTML = tableHTML;
-            
             document.getElementById('revert-button').onclick = () => revertPortfolio(name);
-
         } catch (error) {
             title.textContent = 'Hata';
             tableContainer.innerHTML = `<div id="total-result" class="negative">Hata: ${error.message}</div>`;
@@ -342,7 +305,7 @@
     }
 
     async function revertPortfolio(name) {
-        if (confirm(`"${name}" portföyündeki son değişikliği geri almak istediğinizden emin misiniz? Güncel dağılımınız silinecek ve bir önceki dağılım geri yüklenecektir.`)) {
+        if (confirm(`"${name}" portföyündeki son değişikliği geri almak istediğinizden emin misiniz?`)) {
             try {
                 const response = await fetch(`/revert_portfolio/${name}`, { method: 'POST' });
                 const result = await response.json();
@@ -350,116 +313,79 @@
                     alert(result.success);
                     const activeLi = document.querySelector(`#portfolio-list li[data-name="${name}"]`);
                     showOptions(name, activeLi);
-                } else {
-                    throw new Error(result.error);
-                }
+                } else { throw new Error(result.error); }
             } catch (error) {
                 alert('Geri alma işlemi sırasında bir hata oluştu: ' + error.message);
             }
         }
     }
 
-    // --- BU FONKSİYON TAMAMEN GÜNCELLENDİ ---
     async function displayHistoricalReturns(name) {
-        showResultArea(true);
-        // Diğer pencereleri temizle
-        document.getElementById('stock-results-container').style.display = 'none';
-        document.getElementById('fund-results-container').style.display = 'none';
-        document.getElementById('total-result').innerHTML = '';
-        
-        document.getElementById('historical-results-container').style.display = 'block';
+        showResultArea(true, true);
         document.getElementById('result-title').textContent = `"${name}" Portföyü - Getiri Grafiği Hesaplanıyor...`;
-        
         try {
             const response = await fetch(`/calculate_historical/${name}`);
             const data = await response.json();
-            if (!response.ok) { throw new Error(data.error || 'Bilinmeyen bir hata oluştu.'); }
-            
-            document.getElementById('loader').style.display = 'none';
-            document.getElementById('result-content').style.display = 'block';
+            if (!response.ok) throw new Error(data.error || 'Bilinmeyen bir hata oluştu.');
+            showResultArea(false, true);
 
-            // --- YENİ GRAFİK OLUŞTURMA MANTIĞI ---
-
-            // Ana Portföy Getirisi veri seti (Mavi, Düz Çizgi)
             const datasets = [{
-                label: 'Hesaplanan Portföy Getirisi (%)',
+                label: 'Hesaplanan Portföy Getirisi',
                 data: data.returns,
                 borderColor: 'rgb(54, 162, 235)',
                 backgroundColor: 'rgba(54, 162, 235, 0.5)',
-                borderWidth: 3, // Ana çizgiyi daha belirgin yapalım
+                borderWidth: 3,
                 tension: 0.1,
                 pointBackgroundColor: data.returns.map(v => v >= 0 ? '#27ae60' : '#c0392b')
             }];
 
-            let showLegend = false;
-            // Fonlar için kullanılacak renk paleti
-            const fundColors = [
-                'rgb(255, 159, 64)', // Turuncu
-                'rgb(255, 99, 132)',  // Pembe
-                'rgb(75, 192, 192)',  // Yeşil-Mavi
-                'rgb(153, 102, 255)', // Mor
-                'rgb(255, 205, 86)'   // Sarı
-            ];
+            let notesHtml = '<strong>Grafik Notları:</strong>';
+            notesHtml += `<div><span class="color-box" style="background-color: rgb(54, 162, 235);"></span> Hisse Ağırlıklarına Göre</div>`;
 
-            // Backend'den gelen her bir fonun getirisini ayrı bir veri seti olarak ekle
+            const fundColors = ['rgb(255, 159, 64)', 'rgb(255, 99, 132)', 'rgb(75, 192, 192)', 'rgb(153, 102, 255)', 'rgb(255, 205, 86)'];
             if (data.individual_fund_returns && Object.keys(data.individual_fund_returns).length > 0) {
-                showLegend = true; // Fon varsa lejantı göster
                 Object.entries(data.individual_fund_returns).forEach(([ticker, returns], index) => {
-                    const color = fundColors[index % fundColors.length]; // Renk paletinden sırayla renk seç
+                    const color = fundColors[index % fundColors.length];
                     datasets.push({
-                        label: `${ticker} Fon Gerçek Getirisi (%)`,
+                        label: `${ticker} Fon Getirisi (TEFAS)`,
                         data: returns,
                         borderColor: color,
                         backgroundColor: color.replace('rgb', 'rgba').replace(')', ', 0.5)'),
                         borderWidth: 2,
-                        borderDash: [5, 5], // Kesikli çizgi
+                        borderDash: [5, 5],
                         tension: 0.1,
-                        pointRadius: 2 // Fon noktalarını daha küçük yapalım
+                        pointRadius: 2
                     });
+                    notesHtml += `<div><span class="color-box" style="background-color: ${color}; border-style: dashed;"></span> TEFAS Verisi (${ticker})</div>`;
                 });
             }
 
             const ctx = document.getElementById('historicalLineChart').getContext('2d');
-            if (historicalChart) { historicalChart.destroy(); }
-            
+            if (historicalChart) historicalChart.destroy();
             historicalChart = new Chart(ctx, {
                 type: 'line',
-                data: {
-                    labels: data.dates,
-                    datasets: datasets // Oluşturduğumuz tüm veri setlerini kullan
-                },
+                data: { labels: data.dates, datasets },
                 options: {
                     responsive: true,
+                    maintainAspectRatio: false,
                     plugins: {
-                        legend: {
-                            display: showLegend, // Lejantı koşullu olarak göster
-                            position: 'top',
-                        },
-                        tooltip: {
-                            callbacks: {
-                                label: (context) => `${context.dataset.label}: ${context.raw.toFixed(2)}%`
-                            }
-                        }
+                        legend: { display: false },
+                        tooltip: { callbacks: { label: (c) => `${c.raw.toFixed(2)}%` } },
+                        title: { display: true, text: `"${name}" Portföyü - Son 30 Günlük Getiri Analizi` }
                     },
-                    scales: {
-                        y: { title: { display: true, text: 'Günlük Getiri (%)' } },
-                        x: { title: { display: true, text: 'Tarih' } }
-                    }
+                    scales: { y: { title: { display: true, text: 'Günlük Getiri (%)' } }, x: { title: { display: true, text: 'Tarih' } } }
                 }
             });
-            
-            document.getElementById('result-title').textContent = `"${name}" Portföyü - Son 30 Günlük Getiri Analizi`;
-
+            const chartNotesDiv = document.getElementById('chart-notes');
+            chartNotesDiv.innerHTML = notesHtml;
+            chartNotesDiv.style.display = 'block';
         } catch (error) {
-            document.getElementById('loader').style.display = 'none';
-            document.getElementById('result-content').style.display = 'block';
+            showResultArea(false, false);
             document.getElementById('total-result').innerHTML = `<span class="negative">Hata: ${error.message}</span>`;
-            document.getElementById('historical-results-container').style.display = 'none';
         }
     }
 
     async function showPortfolioEditor(name) {
-        // ... bu fonksiyonda değişiklik yok ...
         const response = await fetch(`/get_portfolio/${name}`);
         const portfolio = await response.json();
         document.getElementById('portfolio-name').value = portfolio.name;
@@ -475,18 +401,15 @@
     }
     
     document.getElementById('save-button').addEventListener('click', async function() {
-        // ... bu fonksiyonda değişiklik yok ...
         const portfolioName = document.getElementById('portfolio-name').value.trim();
         if (!portfolioName) { alert('Lütfen bir portföy adı girin.'); return; }
         const stocks = Array.from(document.querySelectorAll('#stocks-container .stock-row')).map(r => ({ ticker: r.children[0].value.trim().toUpperCase(), weight: r.children[1].value, adet: r.children[2].value }));
         const funds = Array.from(document.querySelectorAll('#funds-container .stock-row')).map(r => ({ ticker: r.children[0].value.trim().toUpperCase(), weight: r.children[1].value, adet: r.children[2].value }));
         if (stocks.length === 0 && funds.length === 0) { alert('Lütfen en az bir varlık girin.'); return; }
-        
         const totalWeight = [...stocks, ...funds].reduce((sum, asset) => sum + parseFloat(asset.weight || 0), 0);
         if (Math.abs(totalWeight - 100) > 0.01) {
             if (!confirm(`Toplam ağırlık ${totalWeight.toFixed(2)}%. 100% değil. Yine de kaydetmek istiyor musunuz?`)) return;
         }
-
         const response = await fetch('/save_portfolio', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: portfolioName, stocks, funds }) });
         const result = await response.json();
         alert(response.ok ? result.success : 'Hata: ' + result.error);
@@ -496,57 +419,44 @@
         }
     });
 
-    // --- Yardımcı Fonksiyonlar ---
     function generateDeterministicColors(labels) {
-        // ... bu fonksiyonda değişiklik yok ...
         const colors = [];
         for (const label of labels) {
             let hash = 0;
-            for (let i = 0; i < label.length; i++) {
-                hash = label.charCodeAt(i) + ((hash << 5) - hash);
-            }
+            for (let i = 0; i < label.length; i++) hash = label.charCodeAt(i) + ((hash << 5) - hash);
             colors.push(`hsl(${hash % 360}, 75%, 60%)`);
         }
         return colors;
     }
 
-    function showResultArea(isLoading) {
-        // ... bu fonksiyonda değişiklik yok ...
+    function showResultArea(isLoading, isGraph = false) {
         ['options-container', 'report-container', 'form-container', 'comparison-container'].forEach(id => document.getElementById(id).style.display = 'none');
         document.getElementById('result-area').style.display = 'block';
         
         document.getElementById('total-result').innerHTML = '';
-        document.getElementById('stock-results-container').style.display = 'none';
-        document.getElementById('fund-results-container').style.display = 'none';
-        document.getElementById('historical-results-container').style.display = 'none';
+        document.getElementById('historical-results-container').style.display = isGraph ? 'block' : 'none';
+        document.getElementById('chart-notes').style.display = 'none';
 
-        if (isLoading) {
-            document.getElementById('loader').style.display = 'block';
-            document.getElementById('result-content').style.display = 'none';
-        } else {
-            document.getElementById('loader').style.display = 'none';
-            document.getElementById('result-content').style.display = 'block';
-        }
+        document.getElementById('loader').style.display = isLoading ? 'block' : 'none';
+        document.getElementById('result-content').style.display = isLoading ? 'none' : 'block';
     }
 
     async function handleCalculate(event) {
-        // ... bu fonksiyonda değişiklik yok ...
         event.preventDefault();
-        showResultArea(true);
+        showResultArea(true, false);
         const stocks = Array.from(document.querySelectorAll('#stocks-container .stock-row')).map(r => ({ ticker: r.children[0].value, weight: r.children[1].value }));
         const funds = Array.from(document.querySelectorAll('#funds-container .stock-row')).map(r => ({ ticker: r.children[0].value, weight: r.children[1].value }));
-        
         try {
             const response = await fetch('/calculate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ stocks, funds }) });
             const result = await response.json();
             if (!response.ok) throw new Error(result.error);
-            showResultArea(false);
+            showResultArea(false, false);
             document.getElementById('result-title').textContent = "Anlık Portföy Getiri Analizi";
             const totalResultDiv = document.getElementById('total-result');
             totalResultDiv.textContent = `${result.total_change >= 0 ? '+' : ''}${result.total_change.toFixed(2)}%`;
             totalResultDiv.className = result.total_change >= 0 ? 'positive' : 'negative';
         } catch (error) {
-            showResultArea(false);
+            showResultArea(false, false);
             document.getElementById('total-result').innerHTML = `<span class="negative">Hata: ${error.message}</span>`;
         }
     }
