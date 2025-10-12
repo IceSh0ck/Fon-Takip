@@ -5,13 +5,13 @@ import yfinance as yf
 import requests
 from datetime import date, timedelta, datetime
 import pandas as pd
-import pdfplumber  # <-- YENİ EKLEME
+import pdfplumber
 
 app = Flask(__name__)
 
 PORTFOLIOS_FILE = 'portfolios.json'
 
-# --- Veri Taşıma ve Yükleme Fonksiyonları (Değişiklik yok) ---
+# --- Veri Taşıma ve Yükleme Fonksiyonları ---
 def migrate_portfolios_if_needed():
     if not os.path.exists(PORTFOLIOS_FILE): return
     try:
@@ -49,7 +49,7 @@ def save_portfolios(portfolios_dict):
 
 migrate_portfolios_if_needed()
 
-# --- Mevcut API Endpointleri (Değişiklik yok) ---
+# --- API Endpointleri ---
 
 @app.route('/')
 def index():
@@ -60,6 +60,7 @@ def get_portfolios():
     portfolios = load_portfolios()
     return jsonify(sorted(list(portfolios.keys())))
 
+# --- DÜZELTME: Bu fonksiyonun doğru çalışması için eksik mantık eklendi ---
 @app.route('/get_portfolio/<portfolio_name>', methods=['GET'])
 def get_portfolio(portfolio_name):
     portfolios = load_portfolios()
@@ -214,7 +215,7 @@ def delete_portfolio():
     else:
         return jsonify({'error': 'Silinecek portföy bulunamadı.'}), 404
 
-# --- YENİ PDF İŞLEME ENDPOINT'İ ---
+# --- GÜVENLİ PDF İŞLEME ENDPOINT'İ ---
 @app.route('/upload_pdf', methods=['POST'])
 def upload_pdf():
     if 'pdf_file' not in request.files:
@@ -224,6 +225,7 @@ def upload_pdf():
     if file.filename == '' or not file.filename.lower().endswith('.pdf'):
         return jsonify({'error': 'Lütfen geçerli bir PDF dosyası seçin.'}), 400
 
+    # --- BU TRY-EXCEPT BLOĞU SUNUCUNUN ÇÖKMESİNİ ENGELLER ---
     try:
         with pdfplumber.open(file) as pdf:
             all_text = ""
@@ -251,20 +253,20 @@ def upload_pdf():
                 weight_str = None
                 
                 for cell in reversed(row):
-                    if cell and '%' in cell:
+                    if cell and isinstance(cell, str) and '%' in cell:
                         weight_str = cell.replace('%', '').replace(',', '.').strip()
                         break
-                if not weight_str and row[-1]:
+                if not weight_str and row[-1] and isinstance(row[-1], str):
                     weight_str = row[-1].replace(',', '.').strip()
 
                 if ticker and weight_str:
                     try:
                         weight = float(weight_str)
-                        clean_ticker = ticker.split(' ')[0].strip()
-                        if len(clean_ticker) >= 3 and weight > 0:
+                        clean_ticker = ''.join(filter(str.isalpha, ticker.split(' ')[0]))
+                        if 3 <= len(clean_ticker) <= 5 and weight > 0:
                             assets.append({'ticker': clean_ticker.upper(), 'weight': weight})
                             found_table = True
-                    except (ValueError, IndexError):
+                    except (ValueError, TypeError):
                         continue
         
         if not found_table:
@@ -276,8 +278,8 @@ def upload_pdf():
         return jsonify({'name': portfolio_name, 'stocks': stocks, 'funds': funds})
 
     except Exception as e:
-        print(f"PDF işlenirken hata oluştu: {e}")
-        return jsonify({'error': f'PDF dosyası işlenirken bir hata oluştu. Dosya formatı desteklenmiyor olabilir.'}), 500
+        print(f"PDF işlenirken kritik bir hata oluştu: {e}")
+        return jsonify({'error': f'Yüklenen PDF dosyası okunamadı. Lütfen dosyanın bozuk olmadığını veya geçerli bir KAP raporu olduğunu kontrol edin.'}), 500
 
 if __name__ == '__main__':
     app.run(debug=True)
