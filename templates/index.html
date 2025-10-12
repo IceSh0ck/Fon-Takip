@@ -42,9 +42,6 @@
         .sidebar-actions button { width: 100%; text-align: center; padding: 10px; }
         #btn-new-portfolio { background-color: #3498db !important; }
         #btn-new-portfolio:hover { background-color: #2980b9 !important; }
-        /* YENİ: Menkul kıymet butonu stili */
-        #btn-show-securities { background-color: #9b59b6 !important; } 
-        #btn-show-securities:hover { background-color: #8e44ad !important; }
         #btn-delete-mode { background-color: #e74c3c !important; }
         #btn-delete-mode:hover { background-color: #c0392b !important; }
         #btn-delete-mode.active { background-color: #c0392b !important; border: 2px solid #2c3e50; }
@@ -59,7 +56,6 @@
         <div class="sidebar-actions">
             <button id="btn-new-portfolio">Yeni Portföy Ekle</button>
             <button id="btn-delete-mode">Portföyü Sil</button>
-            <button id="btn-show-securities">Menkul Kıymetler</button>
         </div>
     </div>
     <div class="content">
@@ -82,17 +78,9 @@
         <div class="container" id="comparison-container" style="display: none;">
             <a href="#" class="back-button" title="Seçeneklere Geri Dön">&larr;</a>
             <h2 id="comparison-title" style="text-align:center;"></h2>
-            <div id="comparison-table-container"></div>
-        </div>
-
-        <div class="container" id="securities-container" style="display: none;">
-            <h2>Menkul Kıymet Arama</h2>
-            <p>Tahvil, Bono, Eurobond, Hisse Senedi vb. için ISIN kodu veya borsa sembolü ile arama yapın.</p>
-            <input type="text" id="securities-search-input" placeholder="Örn: XS1655085485 veya AAPL" style="width: calc(100% - 24px); margin-bottom: 20px;">
-            <div id="securities-results-container">
+            <div id="comparison-table-container">
                 </div>
         </div>
-        
         <div class="container" id="form-container" style="display: block;">
             <a href="#" class="back-button" title="Seçeneklere Geri Dön" style="display: none;">&larr;</a>
             <form id="portfolio-form">
@@ -126,7 +114,6 @@
     let portfolioChart = null;
     let historicalChart = null;
     let isDeleteMode = false;
-    let searchTimeout = null; // Arama için debounce zamanlayıcısı
 
     document.addEventListener('DOMContentLoaded', () => { 
         loadPortfolios(); 
@@ -142,91 +129,8 @@
         document.getElementById('btn-new-portfolio').addEventListener('click', showNewPortfolioForm);
         document.getElementById('btn-delete-mode').addEventListener('click', toggleDeleteMode);
         document.getElementById('portfolio-form').addEventListener('submit', handleCalculate);
-        
-        // YENİ: Menkul Kıymetler butonu ve arama kutusu olay dinleyicileri
-        document.getElementById('btn-show-securities').addEventListener('click', showSecuritiesSearch);
-        document.getElementById('securities-search-input').addEventListener('keyup', handleSecuritySearch);
     });
     
-    // --- YENİ FONKSİYONLAR: MENKUL KIYMET ARAMA ---
-
-    function showSecuritiesSearch() {
-        if(isDeleteMode) toggleDeleteMode();
-        currentPortfolioName = null;
-        document.querySelectorAll('#portfolio-list li').forEach(li => li.classList.remove('active'));
-        // Tüm ana içerik container'larını gizle
-        ['options-container', 'form-container', 'result-area', 'report-container', 'comparison-container'].forEach(id => document.getElementById(id).style.display = 'none');
-        // Menkul kıymet arama container'ını göster
-        document.getElementById('securities-container').style.display = 'block';
-        document.getElementById('securities-search-input').focus();
-    }
-
-    function handleSecuritySearch(event) {
-        clearTimeout(searchTimeout); // Önceki zamanlayıcıyı temizle
-        const query = event.target.value.trim();
-        const resultsContainer = document.getElementById('securities-results-container');
-
-        if (query.length < 2) {
-            resultsContainer.innerHTML = ''; // 2 karakterden azsa sonuçları temizle
-            return;
-        }
-
-        resultsContainer.innerHTML = '<div class="loader"></div>'; // Arama sırasında yükleyici göster
-
-        // Kullanıcı yazmayı bıraktıktan 500ms sonra arama yap (debounce)
-        searchTimeout = setTimeout(async () => {
-            try {
-                const response = await fetch(`/search_securities?query=${encodeURIComponent(query)}`);
-                const results = await response.json();
-                
-                if (!response.ok) {
-                    throw new Error(results.error || 'Bilinmeyen bir hata oluştu.');
-                }
-                displaySecurityResults(results);
-
-            } catch (error) {
-                resultsContainer.innerHTML = `<div class="negative" style="text-align:center; padding: 20px;">Hata: ${error.message}</div>`;
-            }
-        }, 500);
-    }
-
-    function displaySecurityResults(results) {
-        const resultsContainer = document.getElementById('securities-results-container');
-        if (results.length === 0) {
-            resultsContainer.innerHTML = '<p style="text-align:center;">Sonuç bulunamadı.</p>';
-            return;
-        }
-
-        let tableHTML = `
-            <table class="detail-table">
-                <thead>
-                    <tr>
-                        <th>Sembol</th>
-                        <th>İsim / Açıklama</th>
-                        <th>Günlük Değişim (%)</th>
-                    </tr>
-                </thead>
-                <tbody>
-        `;
-        results.forEach(item => {
-            const change = item.change_percent !== null ? parseFloat(item.change_percent) : 0.0;
-            const changeClass = change >= 0 ? 'positive' : 'negative';
-            const changeSign = change >= 0 ? '+' : '';
-            tableHTML += `
-                <tr>
-                    <td>${item.symbol}</td>
-                    <td>${item.name}</td>
-                    <td class="${changeClass}">${changeSign}${change.toFixed(2)}%</td>
-                </tr>
-            `;
-        });
-        tableHTML += '</tbody></table>';
-        resultsContainer.innerHTML = tableHTML;
-    }
-
-
-    // --- MEVCUT FONKSİYONLAR (Gerekli yerlerde küçük değişiklikler yapıldı) ---
-
     function toggleDeleteMode() {
         isDeleteMode = !isDeleteMode;
         const deleteButton = document.getElementById('btn-delete-mode');
@@ -235,8 +139,7 @@
             deleteButton.classList.add('active');
             deleteButton.textContent = 'Silme Modundan Çık';
             body.classList.add('delete-mode-active');
-            // Menkul kıymetler ekranını da gizle
-            ['options-container', 'form-container', 'result-area', 'report-container', 'comparison-container', 'securities-container'].forEach(id => document.getElementById(id).style.display = 'none');
+            ['options-container', 'form-container', 'result-area', 'report-container', 'comparison-container'].forEach(id => document.getElementById(id).style.display = 'none');
             alert('Silme modu aktif. Silmek istediğiniz portföyü listeden seçin.');
         } else {
             deleteButton.classList.remove('active');
@@ -252,8 +155,7 @@
         document.getElementById('portfolio-name').value = '';
         document.getElementById('stocks-container').innerHTML = '';
         document.getElementById('funds-container').innerHTML = '';
-        // Menkul kıymetler ekranını da gizle
-        ['options-container', 'result-area', 'report-container', 'comparison-container', 'securities-container'].forEach(id => document.getElementById(id).style.display = 'none');
+        ['options-container', 'result-area', 'report-container', 'comparison-container'].forEach(id => document.getElementById(id).style.display = 'none');
         document.getElementById('form-container').style.display = 'block';
         document.querySelector('#form-container .back-button').style.display = 'none';
         document.getElementById('result-area').style.display = 'none';
@@ -287,7 +189,7 @@
         portfolioNames.forEach(name => {
             const li = document.createElement('li');
             li.textContent = name;
-            li.dataset.name = name;
+            li.dataset.name = name; // Tıklama için referans
             li.onclick = (event) => {
                 if (isDeleteMode) {
                     deletePortfolio(name);
@@ -318,13 +220,14 @@
         if(targetElement) targetElement.classList.add('active');
         document.getElementById('options-title').textContent = `"${name}" Portföyü İçin İşlem Seçin`;
         
+        // Buton olaylarını ata
         document.getElementById('btn-show-report').onclick = () => displayPieChartReport(name);
         document.getElementById('btn-show-comparison').onclick = () => displayWeightChangeReport(name);
         document.getElementById('btn-show-historical').onclick = () => displayHistoricalReturns(name);
         document.getElementById('btn-edit-portfolio').onclick = () => showPortfolioEditor(name);
 
-        // Menkul kıymetler ekranını da gizle
-        ['form-container', 'result-area', 'report-container', 'comparison-container', 'securities-container'].forEach(id => document.getElementById(id).style.display = 'none');
+        // İlgili panelleri göster/gizle
+        ['form-container', 'result-area', 'report-container', 'comparison-container'].forEach(id => document.getElementById(id).style.display = 'none');
         document.getElementById('options-container').style.display = 'block';
 
         fetchAndDisplayLiveReturn(name);
@@ -363,6 +266,7 @@
     }
 
     async function displayPieChartReport(name) {
+        // ... bu fonksiyonda değişiklik yok ...
         document.getElementById('report-title').textContent = `"${name}" Portföy Dağılım Raporu`;
         const response = await fetch(`/get_portfolio/${name}`);
         const portfolio = await response.json();
@@ -373,11 +277,12 @@
         if(portfolioChart) { portfolioChart.destroy(); }
         portfolioChart = new Chart(ctx, { type: 'pie', data: { labels: labels, datasets: [{ label: 'Portföy Ağırlığı (%)', data: data, backgroundColor: generateDeterministicColors(labels), borderColor: '#fff', borderWidth: 1 }] }, options: { responsive: true, plugins: { legend: { position: 'top' }, tooltip: { callbacks: { label: (context) => `${context.label}: ${context.raw.toFixed(2)}%` } } } } });
         document.getElementById('report-container').style.display = 'block';
-        ['options-container', 'form-container', 'result-area', 'comparison-container', 'securities-container'].forEach(id => document.getElementById(id).style.display = 'none');
+        ['options-container', 'form-container', 'result-area', 'comparison-container'].forEach(id => document.getElementById(id).style.display = 'none');
     }
 
+    // YENİ: AĞIRLIK DEĞİŞİM RAPORUNU GÖSTEREN FONKSİYON
     async function displayWeightChangeReport(name) {
-        ['options-container', 'report-container', 'form-container', 'result-area', 'securities-container'].forEach(id => document.getElementById(id).style.display = 'none');
+        ['options-container', 'report-container', 'form-container', 'result-area'].forEach(id => document.getElementById(id).style.display = 'none');
         const container = document.getElementById('comparison-container');
         const tableContainer = document.getElementById('comparison-table-container');
         const title = document.getElementById('comparison-title');
@@ -397,12 +302,14 @@
 
             let tableHTML = `
                 <table class="detail-table">
-                    <thead><tr>
-                        <th>Varlık Kodu</th>
-                        <th>Önceki Ağırlık (% - ${data.previous_date_str})</th>
-                        <th>Güncel Ağırlık (% - ${data.current_date_str})</th>
-                        <th>Değişim (%)</th>
-                    </tr></thead>
+                    <thead>
+                        <tr>
+                            <th>Varlık Kodu</th>
+                            <th>Önceki Ağırlık (% - ${data.previous_date_str})</th>
+                            <th>Güncel Ağırlık (% - ${data.current_date_str})</th>
+                            <th>Değişim (%)</th>
+                        </tr>
+                    </thead>
                     <tbody>
             `;
 
@@ -411,6 +318,7 @@
                 if (asset.change > 0.001) changeClass = 'positive';
                 if (asset.change < -0.001) changeClass = 'negative';
                 const changeSign = asset.change > 0 ? '+' : '';
+
                 tableHTML += `
                     <tr>
                         <td>${asset.ticker}</td>
@@ -421,15 +329,22 @@
                 `;
             });
             tableHTML += '</tbody></table>';
+            
+            // "Geri Al" butonu ekle
             tableHTML += `<button type="button" class="btn-revert" id="revert-button">Son Değişikliği Geri Al</button>`;
+            
             tableContainer.innerHTML = tableHTML;
+
+            // Butonun olay dinleyicisini ata
             document.getElementById('revert-button').onclick = () => revertPortfolio(name);
+
         } catch (error) {
             title.textContent = 'Hata';
             tableContainer.innerHTML = `<div id="total-result" class="negative">Hata: ${error.message}</div>`;
         }
     }
 
+    // YENİ: SON DEĞİŞİKLİĞİ GERİ ALAN FONKSİYON
     async function revertPortfolio(name) {
         if (confirm(`"${name}" portföyündeki son değişikliği geri almak istediğinizden emin misiniz? Güncel dağılımınız silinecek ve bir önceki dağılım geri yüklenecektir.`)) {
             try {
@@ -437,6 +352,7 @@
                 const result = await response.json();
                 if (response.ok) {
                     alert(result.success);
+                    // Kullanıcıyı portföyün seçenekler ekranına geri yönlendir
                     const activeLi = document.querySelector(`#portfolio-list li[data-name="${name}"]`);
                     showOptions(name, activeLi);
                 } else {
@@ -448,27 +364,33 @@
         }
     }
 
+
     async function displayHistoricalReturns(name) {
-        showResultArea(true, true);
+        // ... bu fonksiyonda değişiklik yok ...
+        showResultArea(true);
+        document.getElementById('historical-results-container').style.display = 'block';
         document.getElementById('result-title').textContent = `"${name}" Portföyü - Son 30 Günlük Getiri Hesaplanıyor...`;
         try {
             const response = await fetch(`/calculate_historical/${name}`);
             const data = await response.json();
             if (!response.ok) { throw new Error(data.error || 'Bilinmeyen bir hata oluştu.'); }
             
-            showResultArea(false);
-            document.getElementById('historical-results-container').style.display = 'block';
+            document.getElementById('loader').style.display = 'none';
+            document.getElementById('result-content').style.display = 'block';
             document.getElementById('result-title').textContent = `"${name}" Portföyü - Son 30 Günlük Getiri Grafiği`;
             const ctx = document.getElementById('historicalLineChart').getContext('2d');
             if (historicalChart) { historicalChart.destroy(); }
             historicalChart = new Chart(ctx, { type: 'line', data: { labels: data.dates, datasets: [{ label: 'Günlük Portföy Getirisi (%)', data: data.returns, borderColor: 'rgb(54, 162, 235)', backgroundColor: 'rgba(54, 162, 235, 0.5)', borderWidth: 2, tension: 0.1, pointBackgroundColor: data.returns.map(v => v >= 0 ? '#27ae60' : '#c0392b') }] }, options: { responsive: true, plugins: { legend: { display: false }, tooltip: { callbacks: { label: (context) => `Getiri: ${context.raw.toFixed(2)}%` } } }, scales: { y: { title: { display: true, text: 'Günlük Getiri (%)' } }, x: { title: { display: true, text: 'Tarih' } } } } });
         } catch (error) {
-            showResultArea(false);
+            document.getElementById('loader').style.display = 'none';
+            document.getElementById('result-content').style.display = 'block';
             document.getElementById('total-result').innerHTML = `<span class="negative">Hata: ${error.message}</span>`;
+            document.getElementById('historical-results-container').style.display = 'none';
         }
     }
 
     async function showPortfolioEditor(name) {
+        // ... bu fonksiyonda değişiklik yok ...
         const response = await fetch(`/get_portfolio/${name}`);
         const portfolio = await response.json();
         document.getElementById('portfolio-name').value = portfolio.name;
@@ -479,11 +401,12 @@
         fundsContainer.innerHTML = '';
         (portfolio.funds || []).forEach(f => addAsset('fund', f.ticker, f.weight, f.adet));
         document.getElementById('form-container').style.display = 'block';
-        ['options-container', 'result-area', 'report-container', 'comparison-container', 'securities-container'].forEach(id=>document.getElementById(id).style.display='none');
+        ['options-container', 'result-area', 'report-container', 'comparison-container'].forEach(id=>document.getElementById(id).style.display='none');
         document.querySelector('#form-container .back-button').style.display = 'block';
     }
     
     document.getElementById('save-button').addEventListener('click', async function() {
+        // ... bu fonksiyonda değişiklik yok ...
         const portfolioName = document.getElementById('portfolio-name').value.trim();
         if (!portfolioName) { alert('Lütfen bir portföy adı girin.'); return; }
         const stocks = Array.from(document.querySelectorAll('#stocks-container .stock-row')).map(r => ({ ticker: r.children[0].value.trim().toUpperCase(), weight: r.children[1].value, adet: r.children[2].value }));
@@ -506,6 +429,7 @@
 
     // --- Yardımcı Fonksiyonlar ---
     function generateDeterministicColors(labels) {
+        // ... bu fonksiyonda değişiklik yok ...
         const colors = [];
         for (const label of labels) {
             let hash = 0;
@@ -517,8 +441,9 @@
         return colors;
     }
 
-    function showResultArea(isLoading, isHistorical = false) {
-        ['options-container', 'report-container', 'form-container', 'comparison-container', 'securities-container'].forEach(id => document.getElementById(id).style.display = 'none');
+    function showResultArea(isLoading) {
+        // ... bu fonksiyonda değişiklik yok ...
+        ['options-container', 'report-container', 'form-container', 'comparison-container'].forEach(id => document.getElementById(id).style.display = 'none');
         document.getElementById('result-area').style.display = 'block';
         
         document.getElementById('total-result').innerHTML = '';
@@ -536,6 +461,7 @@
     }
 
     async function handleCalculate(event) {
+        // ... bu fonksiyonda değişiklik yok ...
         event.preventDefault();
         showResultArea(true);
         const stocks = Array.from(document.querySelectorAll('#stocks-container .stock-row')).map(r => ({ ticker: r.children[0].value, weight: r.children[1].value }));
