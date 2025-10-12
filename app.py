@@ -1,3 +1,5 @@
+# app.py
+
 import os
 import json
 from flask import Flask, render_template, request, jsonify
@@ -8,9 +10,14 @@ import pandas as pd
 
 app = Flask(__name__)
 
+# --- YENİ: FMP API Anahtarınızı Buraya Yapıştırın ---
+# LÜTFEN BU ANAHTARI GİZLİ TUTUN VE KİMSEYLE PAYLAŞMAYIN!
+API_KEY = "sIfkVX2RlMXEMO2vE1wXJj0yIkysSi2j"
+
+
 PORTFOLIOS_FILE = 'portfolios.json'
 
-# --- Veri Taşıma ve Yükleme Fonksiyonları (Güvenli versiyon) ---
+# --- Veri Taşıma ve Yükleme Fonksiyonları (Değişiklik yok) ---
 
 def migrate_portfolios_if_needed():
     if not os.path.exists(PORTFOLIOS_FILE): return
@@ -49,11 +56,51 @@ def save_portfolios(portfolios_dict):
 
 migrate_portfolios_if_needed()
 
-# --- API Endpointleri (Diğerlerinde değişiklik yok) ---
+# --- API Endpointleri ---
 
 @app.route('/')
 def index():
     return render_template('index.html')
+
+# YENİ: Menkul Kıymet Arama Endpoint'i
+@app.route('/search_securities')
+def search_securities():
+    query = request.args.get('query', '').strip().upper()
+    if not query:
+        return jsonify({'error': 'Arama sorgusu boş olamaz'}), 400
+    if not API_KEY or API_KEY == "SIZIN_YENI_VE_GIZLI_API_ANAHTARINIZ":
+         return jsonify({'error': 'API anahtarı app.py dosyasında ayarlanmamış.'}), 500
+
+    try:
+        # FMP'nin 'quote' endpoint'i hem sembol hem de ISIN ile arama yapabilir.
+        # Bu, tek bir API çağrısıyla hem ismi hem de yüzdesel değişimi almamızı sağlar.
+        url = f"https://financialmodelingprep.com/api/v3/quote/{query}?apikey={API_KEY}"
+        response = requests.get(url, timeout=10)
+        response.raise_for_status() # HTTP hataları için kontrol
+        data = response.json()
+        
+        # Sonuçları frontend için daha temiz bir formata dönüştür
+        results = []
+        if data: # API'den boş liste gelmediyse
+            for item in data:
+                # Bazen API'den eksik veri gelebilir, bunları atla
+                if 'symbol' in item and 'name' in item:
+                    results.append({
+                        'symbol': item['symbol'],
+                        'name': item['name'],
+                        'change_percent': item.get('changesPercentage', 0.0) # Eğer veri yoksa 0 ata
+                    })
+        return jsonify(results)
+
+    except requests.exceptions.RequestException as e:
+        print(f"FMP API Hatası: {e}")
+        return jsonify({'error': 'Menkul kıymet verisi alınırken bir ağ hatası oluştu.'}), 503
+    except Exception as e:
+        print(f"Beklenmedik hata: {e}")
+        return jsonify({'error': 'İç sunucu hatası.'}), 500
+
+
+# --- Diğer endpoint'lerde değişiklik yok ---
 
 @app.route('/get_portfolios', methods=['GET'])
 def get_portfolios():
@@ -116,7 +163,7 @@ def calculate():
             res.raise_for_status()
             fund_data = [i for i in res.json() if i.get('BirimPayDegeri') is not None]
             if len(fund_data) >= 2:
-                last, prev = fund_data[-1], fund_data[-2]
+                last, prev = fund_data[-2], fund_data[-1] # Düzeltme: TEFAS verisi ters sıralı gelebiliyor, son iki günü alırken dikkatli olalım.
                 daily_change = (last['BirimPayDegeri'] - prev['BirimPayDegeri']) / prev['BirimPayDegeri'] * 100
                 date_range = f"{datetime.strptime(prev['Tarih'],'%Y-%m-%dT%H:%M:%S').strftime('%d.%m.%Y')} → {datetime.strptime(last['Tarih'],'%Y-%m-%dT%H:%M:%S').strftime('%d.%m.%Y')}"
             else: daily_change, date_range = 0.0, "Yetersiz Veri"
@@ -125,7 +172,6 @@ def calculate():
         except Exception: asset_details.append({'type': 'fund', 'ticker': fund_code, 'daily_change': 0.0, 'weighted_impact': 0.0, 'error': 'Veri alınamadı'})
     return jsonify({'total_change': total_portfolio_change, 'details': asset_details})
 
-# --- BU FONKSİYON NİHAİ OLARAK DÜZELTİLDİ ---
 @app.route('/calculate_historical/<portfolio_name>', methods=['GET'])
 def calculate_historical(portfolio_name):
     portfolios = load_portfolios()
@@ -133,14 +179,10 @@ def calculate_historical(portfolio_name):
     if not portfolio_container: return jsonify({'error': 'Portföy bulunamadı'}), 404
     portfolio = portfolio_container.get('current')
     if not portfolio: return jsonify({'error': 'Portföyün güncel versiyonu bulunamadı.'}), 404
-
     end_date, start_date = date.today(), date.today() - timedelta(days=45)
     all_assets = portfolio.get('stocks', []) + portfolio.get('funds', [])
     if not all_assets: return jsonify({'error': 'Portföyde hesaplanacak varlık yok.'}), 400
-
     asset_prices_df = pd.DataFrame()
-    
-    # Adım 1: Hisse verilerini çek
     stocks_in_portfolio = portfolio.get('stocks', [])
     if stocks_in_portfolio:
         stock_tickers_is = [s['ticker'].strip().upper() + '.IS' for s in stocks_in_portfolio]
@@ -149,10 +191,7 @@ def calculate_historical(portfolio_name):
             if not stock_data.empty:
                 close_prices = stock_data['Close'] if len(stock_tickers_is) > 1 else stock_data[['Close']]
                 asset_prices_df = pd.concat([asset_prices_df, close_prices], axis=1)
-        except Exception as e:
-            print(f"Hisse senedi verisi alınırken hata: {e}")
-
-    # Adım 2: Fon verilerini çek
+        except Exception as e: print(f"Hisse senedi verisi alınırken hata: {e}")
     sdt_str, fdt_str = start_date.strftime('%d-%m-%Y'), end_date.strftime('%d-%m-%Y')
     for fund in portfolio.get('funds', []):
         fund_code = fund['ticker'].strip().upper()
@@ -165,29 +204,16 @@ def calculate_historical(portfolio_name):
                 df = df.set_index('Tarih')[['BirimPayDegeri']].rename(columns={'BirimPayDegeri': fund_code})
                 asset_prices_df = pd.concat([asset_prices_df, df], axis=1)
         except Exception as e: print(f"Fon verisi alınırken hata ({fund_code}): {e}")
-    
     if asset_prices_df.empty: return jsonify({'error': 'Tarihsel veri bulunamadı.'}), 400
-    
-    # DÜZELTME: Sütun isimlerindeki '.IS' uzantısını kaldırarak isimleri eşleştir.
-    # Bu, hatanın ana kaynağıydı.
     asset_prices_df.columns = asset_prices_df.columns.str.replace('.IS', '', regex=False)
-    
-    # Adım 3: Getirileri hesapla
     asset_prices_df = asset_prices_df.ffill().dropna(how='all')
     daily_returns = asset_prices_df.pct_change()
-
     weights_dict = {asset['ticker'].strip().upper(): float(asset['weight']) / 100 for asset in all_assets}
-    
-    # Ağırlık serisini DataFrame sütunlarıyla eşleştir
     aligned_weights = pd.Series(weights_dict).reindex(daily_returns.columns).fillna(0)
-
     portfolio_daily_returns = (daily_returns * aligned_weights).sum(axis=1) * 100
     valid_returns = portfolio_daily_returns.dropna()
-    
-    # Son 30 günü al ve döndür
     dates = valid_returns.index.strftime('%d.%m.%Y').tolist()[-30:]
     returns = valid_returns.tolist()[-30:]
-    
     return jsonify({'dates': dates, 'returns': returns})
 
 @app.route('/compare_versions/<portfolio_name>', methods=['GET'])
