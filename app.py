@@ -5,13 +5,13 @@ import yfinance as yf
 import requests
 from datetime import date, timedelta, datetime
 import pandas as pd
+import pdfplumber  # <-- YENİ EKLEME
 
 app = Flask(__name__)
 
 PORTFOLIOS_FILE = 'portfolios.json'
 
-# --- Veri Taşıma ve Yükleme Fonksiyonları (Güvenli versiyon) ---
-
+# --- Veri Taşıma ve Yükleme Fonksiyonları (Değişiklik yok) ---
 def migrate_portfolios_if_needed():
     if not os.path.exists(PORTFOLIOS_FILE): return
     try:
@@ -49,7 +49,7 @@ def save_portfolios(portfolios_dict):
 
 migrate_portfolios_if_needed()
 
-# --- API Endpointleri (Diğerlerinde değişiklik yok) ---
+# --- Mevcut API Endpointleri (Değişiklik yok) ---
 
 @app.route('/')
 def index():
@@ -125,7 +125,6 @@ def calculate():
         except Exception: asset_details.append({'type': 'fund', 'ticker': fund_code, 'daily_change': 0.0, 'weighted_impact': 0.0, 'error': 'Veri alınamadı'})
     return jsonify({'total_change': total_portfolio_change, 'details': asset_details})
 
-# --- BU FONKSİYON NİHAİ OLARAK DÜZELTİLDİ ---
 @app.route('/calculate_historical/<portfolio_name>', methods=['GET'])
 def calculate_historical(portfolio_name):
     portfolios = load_portfolios()
@@ -133,14 +132,10 @@ def calculate_historical(portfolio_name):
     if not portfolio_container: return jsonify({'error': 'Portföy bulunamadı'}), 404
     portfolio = portfolio_container.get('current')
     if not portfolio: return jsonify({'error': 'Portföyün güncel versiyonu bulunamadı.'}), 404
-
     end_date, start_date = date.today(), date.today() - timedelta(days=45)
     all_assets = portfolio.get('stocks', []) + portfolio.get('funds', [])
     if not all_assets: return jsonify({'error': 'Portföyde hesaplanacak varlık yok.'}), 400
-
     asset_prices_df = pd.DataFrame()
-    
-    # Adım 1: Hisse verilerini çek
     stocks_in_portfolio = portfolio.get('stocks', [])
     if stocks_in_portfolio:
         stock_tickers_is = [s['ticker'].strip().upper() + '.IS' for s in stocks_in_portfolio]
@@ -151,8 +146,6 @@ def calculate_historical(portfolio_name):
                 asset_prices_df = pd.concat([asset_prices_df, close_prices], axis=1)
         except Exception as e:
             print(f"Hisse senedi verisi alınırken hata: {e}")
-
-    # Adım 2: Fon verilerini çek
     sdt_str, fdt_str = start_date.strftime('%d-%m-%Y'), end_date.strftime('%d-%m-%Y')
     for fund in portfolio.get('funds', []):
         fund_code = fund['ticker'].strip().upper()
@@ -165,29 +158,16 @@ def calculate_historical(portfolio_name):
                 df = df.set_index('Tarih')[['BirimPayDegeri']].rename(columns={'BirimPayDegeri': fund_code})
                 asset_prices_df = pd.concat([asset_prices_df, df], axis=1)
         except Exception as e: print(f"Fon verisi alınırken hata ({fund_code}): {e}")
-    
     if asset_prices_df.empty: return jsonify({'error': 'Tarihsel veri bulunamadı.'}), 400
-    
-    # DÜZELTME: Sütun isimlerindeki '.IS' uzantısını kaldırarak isimleri eşleştir.
-    # Bu, hatanın ana kaynağıydı.
     asset_prices_df.columns = asset_prices_df.columns.str.replace('.IS', '', regex=False)
-    
-    # Adım 3: Getirileri hesapla
     asset_prices_df = asset_prices_df.ffill().dropna(how='all')
     daily_returns = asset_prices_df.pct_change()
-
     weights_dict = {asset['ticker'].strip().upper(): float(asset['weight']) / 100 for asset in all_assets}
-    
-    # Ağırlık serisini DataFrame sütunlarıyla eşleştir
     aligned_weights = pd.Series(weights_dict).reindex(daily_returns.columns).fillna(0)
-
     portfolio_daily_returns = (daily_returns * aligned_weights).sum(axis=1) * 100
     valid_returns = portfolio_daily_returns.dropna()
-    
-    # Son 30 günü al ve döndür
     dates = valid_returns.index.strftime('%d.%m.%Y').tolist()[-30:]
     returns = valid_returns.tolist()[-30:]
-    
     return jsonify({'dates': dates, 'returns': returns})
 
 @app.route('/compare_versions/<portfolio_name>', methods=['GET'])
@@ -233,6 +213,71 @@ def delete_portfolio():
         return jsonify({'success': f'"{portfolio_name_to_delete}" portföyü başarıyla silindi.'})
     else:
         return jsonify({'error': 'Silinecek portföy bulunamadı.'}), 404
+
+# --- YENİ PDF İŞLEME ENDPOINT'İ ---
+@app.route('/upload_pdf', methods=['POST'])
+def upload_pdf():
+    if 'pdf_file' not in request.files:
+        return jsonify({'error': 'Sunucuya dosya gönderilmedi.'}), 400
+    
+    file = request.files['pdf_file']
+    if file.filename == '' or not file.filename.lower().endswith('.pdf'):
+        return jsonify({'error': 'Lütfen geçerli bir PDF dosyası seçin.'}), 400
+
+    try:
+        with pdfplumber.open(file) as pdf:
+            all_text = ""
+            tables = []
+            for page in pdf.pages:
+                page_text = page.extract_text()
+                if page_text: all_text += page_text + "\n"
+                tables.extend(page.extract_tables())
+
+        portfolio_name = "PDF'ten Okunan Portföy"
+        for line in all_text.split('\n'):
+            if "Fonun Unvanı" in line:
+                potential_name = line.split(':')[-1].strip()
+                if len(potential_name) > 5:
+                    portfolio_name = potential_name
+                    break
+        
+        assets = []
+        found_table = False
+        for table in tables:
+            for row in table:
+                if not row or len(row) < 2: continue
+                
+                ticker = row[0].split('\n')[0].strip() if row[0] else ''
+                weight_str = None
+                
+                for cell in reversed(row):
+                    if cell and '%' in cell:
+                        weight_str = cell.replace('%', '').replace(',', '.').strip()
+                        break
+                if not weight_str and row[-1]:
+                    weight_str = row[-1].replace(',', '.').strip()
+
+                if ticker and weight_str:
+                    try:
+                        weight = float(weight_str)
+                        clean_ticker = ticker.split(' ')[0].strip()
+                        if len(clean_ticker) >= 3 and weight > 0:
+                            assets.append({'ticker': clean_ticker.upper(), 'weight': weight})
+                            found_table = True
+                    except (ValueError, IndexError):
+                        continue
+        
+        if not found_table:
+            return jsonify({'error': 'PDF içinden geçerli bir varlık tablosu okunamadı. Lütfen KAP PDR raporu olduğundan emin olun.'}), 400
+
+        stocks = [a for a in assets if len(a['ticker']) > 3]
+        funds = [a for a in assets if len(a['ticker']) == 3]
+
+        return jsonify({'name': portfolio_name, 'stocks': stocks, 'funds': funds})
+
+    except Exception as e:
+        print(f"PDF işlenirken hata oluştu: {e}")
+        return jsonify({'error': f'PDF dosyası işlenirken bir hata oluştu. Dosya formatı desteklenmiyor olabilir.'}), 500
 
 if __name__ == '__main__':
     app.run(debug=True)
