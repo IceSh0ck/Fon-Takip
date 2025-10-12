@@ -2,4 +2,3 @@ Flask
 yfinance
 requests
 gunicorn
-pdfplumber
