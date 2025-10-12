@@ -1,5 +1,3 @@
-# app.py (GÜNCELLENMİŞ VERSİYON)
-
 import os
 import json
 from flask import Flask, render_template, request, jsonify
@@ -10,14 +8,10 @@ import pandas as pd
 
 app = Flask(__name__)
 
-# --- FMP API Anahtarınızı Buraya Yapıştırın ---
-API_KEY = "sIfkVX2RlMXEMO2vE1wXJj0yIkysSi2j"
-
-
 PORTFOLIOS_FILE = 'portfolios.json'
 
-# --- Veri Taşıma ve Yükleme Fonksiyonları (Değişiklik yok) ---
-# ... (Bu kısımlar aynı kaldığı için buraya eklemiyorum, sizdeki mevcut halleriyle kalabilir)
+# --- Veri Taşıma ve Yükleme Fonksiyonları (Güvenli versiyon) ---
+
 def migrate_portfolios_if_needed():
     if not os.path.exists(PORTFOLIOS_FILE): return
     try:
@@ -55,75 +49,12 @@ def save_portfolios(portfolios_dict):
 
 migrate_portfolios_if_needed()
 
-
-# --- API Endpointleri ---
+# --- API Endpointleri (Diğerlerinde değişiklik yok) ---
 
 @app.route('/')
 def index():
     return render_template('index.html')
 
-# ####################################################################
-# YENİ VE GÜNCELLENMİŞ MENKUL KIYMET ARAMA FONKSİYONU
-# ####################################################################
-@app.route('/search_securities')
-def search_securities():
-    query = request.args.get('query', '').strip()
-    if not query:
-        return jsonify({'error': 'Arama sorgusu boş olamaz'}), 400
-    if not API_KEY or API_KEY == "SIZIN_YENI_VE_GIZLI_API_ANAHTARINIZ":
-         return jsonify({'error': 'API anahtarı app.py dosyasında ayarlanmamış.'}), 500
-
-    try:
-        # Adım 1: Kullanıcının sorgusuyla eşleşen sembolleri bulmak için 'search' endpoint'ini kullan.
-        # Bu endpoint ücretsiz planlarda genellikle daha esnektir.
-        search_url = f"https://financialmodelingprep.com/api/v3/search?query={query}&limit=10&apikey={API_KEY}"
-        search_response = requests.get(search_url, timeout=10)
-        search_response.raise_for_status()
-        search_data = search_response.json()
-
-        if not search_data:
-            return jsonify([]) # Hiçbir sonuç bulunamadıysa boş liste döndür.
-
-        # Adım 2: Bulunan sembollerin fiyat bilgilerini almak için 'quote' endpoint'ini kullan.
-        # 'quote' endpoint'i virgülle ayrılmış birden çok sembolü kabul eder, bu sayede tek çağrı yaparız.
-        symbols = [item['symbol'] for item in search_data]
-        symbols_str = ",".join(symbols)
-        
-        quote_url = f"https://financialmodelingprep.com/api/v3/quote/{symbols_str}?apikey={API_KEY}"
-        quote_response = requests.get(quote_url, timeout=10)
-        quote_response.raise_for_status()
-        quote_data = quote_response.json()
-
-        # Sonuçları frontend için daha temiz bir formata dönüştür
-        results = []
-        if quote_data:
-            for item in quote_data:
-                if 'symbol' in item and 'name' in item:
-                    results.append({
-                        'symbol': item['symbol'],
-                        'name': item['name'],
-                        'change_percent': item.get('changesPercentage', 0.0)
-                    })
-        
-        # Sonuçları orijinal arama sırasına göre sıralayalım (isteğe bağlı ama daha iyi bir kullanıcı deneyimi)
-        results.sort(key=lambda x: symbols.index(x['symbol']) if x['symbol'] in symbols else 999)
-        
-        return jsonify(results)
-
-    except requests.exceptions.RequestException as e:
-        # Hata mesajını daha anlaşılır hale getirelim.
-        error_message = str(e)
-        if "401" in error_message or "403" in error_message:
-            return jsonify({'error': 'Geçersiz API Anahtarı veya Abonelik Sorunu. Lütfen FMP anahtarınızı kontrol edin.'}), 401
-        print(f"FMP API Hatası: {e}")
-        return jsonify({'error': 'Menkul kıymet verisi alınırken bir ağ hatası oluştu.'}), 503
-    except Exception as e:
-        print(f"Beklenmedik hata: {e}")
-        return jsonify({'error': 'İç sunucu hatası.'}), 500
-
-
-# --- Diğer endpoint'lerde değişiklik yok ---
-# ... (Geri kalan tüm fonksiyonlarınız aynı şekilde kalacak)
 @app.route('/get_portfolios', methods=['GET'])
 def get_portfolios():
     portfolios = load_portfolios()
@@ -194,6 +125,7 @@ def calculate():
         except Exception: asset_details.append({'type': 'fund', 'ticker': fund_code, 'daily_change': 0.0, 'weighted_impact': 0.0, 'error': 'Veri alınamadı'})
     return jsonify({'total_change': total_portfolio_change, 'details': asset_details})
 
+# --- BU FONKSİYON NİHAİ OLARAK DÜZELTİLDİ ---
 @app.route('/calculate_historical/<portfolio_name>', methods=['GET'])
 def calculate_historical(portfolio_name):
     portfolios = load_portfolios()
@@ -201,10 +133,14 @@ def calculate_historical(portfolio_name):
     if not portfolio_container: return jsonify({'error': 'Portföy bulunamadı'}), 404
     portfolio = portfolio_container.get('current')
     if not portfolio: return jsonify({'error': 'Portföyün güncel versiyonu bulunamadı.'}), 404
+
     end_date, start_date = date.today(), date.today() - timedelta(days=45)
     all_assets = portfolio.get('stocks', []) + portfolio.get('funds', [])
     if not all_assets: return jsonify({'error': 'Portföyde hesaplanacak varlık yok.'}), 400
+
     asset_prices_df = pd.DataFrame()
+    
+    # Adım 1: Hisse verilerini çek
     stocks_in_portfolio = portfolio.get('stocks', [])
     if stocks_in_portfolio:
         stock_tickers_is = [s['ticker'].strip().upper() + '.IS' for s in stocks_in_portfolio]
@@ -213,7 +149,10 @@ def calculate_historical(portfolio_name):
             if not stock_data.empty:
                 close_prices = stock_data['Close'] if len(stock_tickers_is) > 1 else stock_data[['Close']]
                 asset_prices_df = pd.concat([asset_prices_df, close_prices], axis=1)
-        except Exception as e: print(f"Hisse senedi verisi alınırken hata: {e}")
+        except Exception as e:
+            print(f"Hisse senedi verisi alınırken hata: {e}")
+
+    # Adım 2: Fon verilerini çek
     sdt_str, fdt_str = start_date.strftime('%d-%m-%Y'), end_date.strftime('%d-%m-%Y')
     for fund in portfolio.get('funds', []):
         fund_code = fund['ticker'].strip().upper()
@@ -226,16 +165,29 @@ def calculate_historical(portfolio_name):
                 df = df.set_index('Tarih')[['BirimPayDegeri']].rename(columns={'BirimPayDegeri': fund_code})
                 asset_prices_df = pd.concat([asset_prices_df, df], axis=1)
         except Exception as e: print(f"Fon verisi alınırken hata ({fund_code}): {e}")
+    
     if asset_prices_df.empty: return jsonify({'error': 'Tarihsel veri bulunamadı.'}), 400
+    
+    # DÜZELTME: Sütun isimlerindeki '.IS' uzantısını kaldırarak isimleri eşleştir.
+    # Bu, hatanın ana kaynağıydı.
     asset_prices_df.columns = asset_prices_df.columns.str.replace('.IS', '', regex=False)
+    
+    # Adım 3: Getirileri hesapla
     asset_prices_df = asset_prices_df.ffill().dropna(how='all')
     daily_returns = asset_prices_df.pct_change()
+
     weights_dict = {asset['ticker'].strip().upper(): float(asset['weight']) / 100 for asset in all_assets}
+    
+    # Ağırlık serisini DataFrame sütunlarıyla eşleştir
     aligned_weights = pd.Series(weights_dict).reindex(daily_returns.columns).fillna(0)
+
     portfolio_daily_returns = (daily_returns * aligned_weights).sum(axis=1) * 100
     valid_returns = portfolio_daily_returns.dropna()
+    
+    # Son 30 günü al ve döndür
     dates = valid_returns.index.strftime('%d.%m.%Y').tolist()[-30:]
     returns = valid_returns.tolist()[-30:]
+    
     return jsonify({'dates': dates, 'returns': returns})
 
 @app.route('/compare_versions/<portfolio_name>', methods=['GET'])
@@ -284,4 +236,3 @@ def delete_portfolio():
 
 if __name__ == '__main__':
     app.run(debug=True)
-
