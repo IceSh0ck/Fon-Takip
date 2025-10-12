@@ -1,4 +1,4 @@
-# app.py
+# app.py (GÜNCELLENMİŞ VERSİYON)
 
 import os
 import json
@@ -10,15 +10,14 @@ import pandas as pd
 
 app = Flask(__name__)
 
-# --- YENİ: FMP API Anahtarınızı Buraya Yapıştırın ---
-# LÜTFEN BU ANAHTARI GİZLİ TUTUN VE KİMSEYLE PAYLAŞMAYIN!
+# --- FMP API Anahtarınızı Buraya Yapıştırın ---
 API_KEY = "sIfkVX2RlMXEMO2vE1wXJj0yIkysSi2j"
 
 
 PORTFOLIOS_FILE = 'portfolios.json'
 
 # --- Veri Taşıma ve Yükleme Fonksiyonları (Değişiklik yok) ---
-
+# ... (Bu kısımlar aynı kaldığı için buraya eklemiyorum, sizdeki mevcut halleriyle kalabilir)
 def migrate_portfolios_if_needed():
     if not os.path.exists(PORTFOLIOS_FILE): return
     try:
@@ -56,43 +55,66 @@ def save_portfolios(portfolios_dict):
 
 migrate_portfolios_if_needed()
 
+
 # --- API Endpointleri ---
 
 @app.route('/')
 def index():
     return render_template('index.html')
 
-# YENİ: Menkul Kıymet Arama Endpoint'i
+# ####################################################################
+# YENİ VE GÜNCELLENMİŞ MENKUL KIYMET ARAMA FONKSİYONU
+# ####################################################################
 @app.route('/search_securities')
 def search_securities():
-    query = request.args.get('query', '').strip().upper()
+    query = request.args.get('query', '').strip()
     if not query:
         return jsonify({'error': 'Arama sorgusu boş olamaz'}), 400
     if not API_KEY or API_KEY == "SIZIN_YENI_VE_GIZLI_API_ANAHTARINIZ":
          return jsonify({'error': 'API anahtarı app.py dosyasında ayarlanmamış.'}), 500
 
     try:
-        # FMP'nin 'quote' endpoint'i hem sembol hem de ISIN ile arama yapabilir.
-        # Bu, tek bir API çağrısıyla hem ismi hem de yüzdesel değişimi almamızı sağlar.
-        url = f"https://financialmodelingprep.com/api/v3/quote/{query}?apikey={API_KEY}"
-        response = requests.get(url, timeout=10)
-        response.raise_for_status() # HTTP hataları için kontrol
-        data = response.json()
+        # Adım 1: Kullanıcının sorgusuyla eşleşen sembolleri bulmak için 'search' endpoint'ini kullan.
+        # Bu endpoint ücretsiz planlarda genellikle daha esnektir.
+        search_url = f"https://financialmodelingprep.com/api/v3/search?query={query}&limit=10&apikey={API_KEY}"
+        search_response = requests.get(search_url, timeout=10)
+        search_response.raise_for_status()
+        search_data = search_response.json()
+
+        if not search_data:
+            return jsonify([]) # Hiçbir sonuç bulunamadıysa boş liste döndür.
+
+        # Adım 2: Bulunan sembollerin fiyat bilgilerini almak için 'quote' endpoint'ini kullan.
+        # 'quote' endpoint'i virgülle ayrılmış birden çok sembolü kabul eder, bu sayede tek çağrı yaparız.
+        symbols = [item['symbol'] for item in search_data]
+        symbols_str = ",".join(symbols)
         
+        quote_url = f"https://financialmodelingprep.com/api/v3/quote/{symbols_str}?apikey={API_KEY}"
+        quote_response = requests.get(quote_url, timeout=10)
+        quote_response.raise_for_status()
+        quote_data = quote_response.json()
+
         # Sonuçları frontend için daha temiz bir formata dönüştür
         results = []
-        if data: # API'den boş liste gelmediyse
-            for item in data:
-                # Bazen API'den eksik veri gelebilir, bunları atla
+        if quote_data:
+            for item in quote_data:
                 if 'symbol' in item and 'name' in item:
                     results.append({
                         'symbol': item['symbol'],
                         'name': item['name'],
-                        'change_percent': item.get('changesPercentage', 0.0) # Eğer veri yoksa 0 ata
+                        'change_percent': item.get('changesPercentage', 0.0)
                     })
+        
+        # Sonuçları orijinal arama sırasına göre sıralayalım (isteğe bağlı ama daha iyi bir kullanıcı deneyimi)
+        results.sort(key=lambda x: symbols.index(x['symbol']) if x['symbol'] in symbols else 999)
+        
         return jsonify(results)
 
     except requests.exceptions.RequestException as e:
+        # Hata mesajını daha anlaşılır hale getirelim.
+        error_message = str(e)
+        if "401" in error_message or "403" in error_message:
+            return jsonify({'error': 'Geçersiz API Anahtarı veya Abonelik Sorunu. Lütfen FMP anahtarınızı kontrol edin.'}), 401
         print(f"FMP API Hatası: {e}")
         return jsonify({'error': 'Menkul kıymet verisi alınırken bir ağ hatası oluştu.'}), 503
     except Exception as e:
@@ -101,7 +123,7 @@ def search_securities():
 
 
 # --- Diğer endpoint'lerde değişiklik yok ---
-
+# ... (Geri kalan tüm fonksiyonlarınız aynı şekilde kalacak)
 @app.route('/get_portfolios', methods=['GET'])
 def get_portfolios():
     portfolios = load_portfolios()
@@ -163,7 +185,7 @@ def calculate():
             res.raise_for_status()
             fund_data = [i for i in res.json() if i.get('BirimPayDegeri') is not None]
             if len(fund_data) >= 2:
-                last, prev = fund_data[-2], fund_data[-1] # Düzeltme: TEFAS verisi ters sıralı gelebiliyor, son iki günü alırken dikkatli olalım.
+                last, prev = fund_data[-1], fund_data[-2]
                 daily_change = (last['BirimPayDegeri'] - prev['BirimPayDegeri']) / prev['BirimPayDegeri'] * 100
                 date_range = f"{datetime.strptime(prev['Tarih'],'%Y-%m-%dT%H:%M:%S').strftime('%d.%m.%Y')} → {datetime.strptime(last['Tarih'],'%Y-%m-%dT%H:%M:%S').strftime('%d.%m.%Y')}"
             else: daily_change, date_range = 0.0, "Yetersiz Veri"
