@@ -66,7 +66,7 @@
             <div class="options-menu">
                 <button id="btn-show-report">1. Portföy Dağılım Raporunu Gör</button>
                 <button id="btn-show-comparison">2. Portföy Ağırlık Değişim Raporu</button>
-                <button id="btn-show-historical">3. Son 30 Günlük Portföy Getirisi</button>
+                <button id="btn-show-historical">3. Son 30 Günlük Getiri Grafiği</button>
                 <button id="btn-edit-portfolio">4. Portföy Dağılımını Değiştir</button>
             </div>
         </div>
@@ -79,7 +79,7 @@
             <a href="#" class="back-button" title="Seçeneklere Geri Dön">&larr;</a>
             <h2 id="comparison-title" style="text-align:center;"></h2>
             <div id="comparison-table-container">
-                </div>
+            </div>
         </div>
         <div class="container" id="form-container" style="display: block;">
             <a href="#" class="back-button" title="Seçeneklere Geri Dön" style="display: none;">&larr;</a>
@@ -279,8 +279,7 @@
         document.getElementById('report-container').style.display = 'block';
         ['options-container', 'form-container', 'result-area', 'comparison-container'].forEach(id => document.getElementById(id).style.display = 'none');
     }
-
-    // YENİ: AĞIRLIK DEĞİŞİM RAPORUNU GÖSTEREN FONKSİYON
+    
     async function displayWeightChangeReport(name) {
         ['options-container', 'report-container', 'form-container', 'result-area'].forEach(id => document.getElementById(id).style.display = 'none');
         const container = document.getElementById('comparison-container');
@@ -330,12 +329,10 @@
             });
             tableHTML += '</tbody></table>';
             
-            // "Geri Al" butonu ekle
             tableHTML += `<button type="button" class="btn-revert" id="revert-button">Son Değişikliği Geri Al</button>`;
             
             tableContainer.innerHTML = tableHTML;
-
-            // Butonun olay dinleyicisini ata
+            
             document.getElementById('revert-button').onclick = () => revertPortfolio(name);
 
         } catch (error) {
@@ -344,7 +341,6 @@
         }
     }
 
-    // YENİ: SON DEĞİŞİKLİĞİ GERİ ALAN FONKSİYON
     async function revertPortfolio(name) {
         if (confirm(`"${name}" portföyündeki son değişikliği geri almak istediğinizden emin misiniz? Güncel dağılımınız silinecek ve bir önceki dağılım geri yüklenecektir.`)) {
             try {
@@ -352,7 +348,6 @@
                 const result = await response.json();
                 if (response.ok) {
                     alert(result.success);
-                    // Kullanıcıyı portföyün seçenekler ekranına geri yönlendir
                     const activeLi = document.querySelector(`#portfolio-list li[data-name="${name}"]`);
                     showOptions(name, activeLi);
                 } else {
@@ -364,12 +359,17 @@
         }
     }
 
-
+    // --- BU FONKSİYON TAMAMEN GÜNCELLENDİ ---
     async function displayHistoricalReturns(name) {
-        // ... bu fonksiyonda değişiklik yok ...
         showResultArea(true);
+        // Diğer pencereleri temizle
+        document.getElementById('stock-results-container').style.display = 'none';
+        document.getElementById('fund-results-container').style.display = 'none';
+        document.getElementById('total-result').innerHTML = '';
+        
         document.getElementById('historical-results-container').style.display = 'block';
-        document.getElementById('result-title').textContent = `"${name}" Portföyü - Son 30 Günlük Getiri Hesaplanıyor...`;
+        document.getElementById('result-title').textContent = `"${name}" Portföyü - Getiri Grafiği Hesaplanıyor...`;
+        
         try {
             const response = await fetch(`/calculate_historical/${name}`);
             const data = await response.json();
@@ -377,10 +377,79 @@
             
             document.getElementById('loader').style.display = 'none';
             document.getElementById('result-content').style.display = 'block';
-            document.getElementById('result-title').textContent = `"${name}" Portföyü - Son 30 Günlük Getiri Grafiği`;
+
+            // --- YENİ GRAFİK OLUŞTURMA MANTIĞI ---
+
+            // Ana Portföy Getirisi veri seti (Mavi, Düz Çizgi)
+            const datasets = [{
+                label: 'Hesaplanan Portföy Getirisi (%)',
+                data: data.returns,
+                borderColor: 'rgb(54, 162, 235)',
+                backgroundColor: 'rgba(54, 162, 235, 0.5)',
+                borderWidth: 3, // Ana çizgiyi daha belirgin yapalım
+                tension: 0.1,
+                pointBackgroundColor: data.returns.map(v => v >= 0 ? '#27ae60' : '#c0392b')
+            }];
+
+            let showLegend = false;
+            // Fonlar için kullanılacak renk paleti
+            const fundColors = [
+                'rgb(255, 159, 64)', // Turuncu
+                'rgb(255, 99, 132)',  // Pembe
+                'rgb(75, 192, 192)',  // Yeşil-Mavi
+                'rgb(153, 102, 255)', // Mor
+                'rgb(255, 205, 86)'   // Sarı
+            ];
+
+            // Backend'den gelen her bir fonun getirisini ayrı bir veri seti olarak ekle
+            if (data.individual_fund_returns && Object.keys(data.individual_fund_returns).length > 0) {
+                showLegend = true; // Fon varsa lejantı göster
+                Object.entries(data.individual_fund_returns).forEach(([ticker, returns], index) => {
+                    const color = fundColors[index % fundColors.length]; // Renk paletinden sırayla renk seç
+                    datasets.push({
+                        label: `${ticker} Fon Gerçek Getirisi (%)`,
+                        data: returns,
+                        borderColor: color,
+                        backgroundColor: color.replace('rgb', 'rgba').replace(')', ', 0.5)'),
+                        borderWidth: 2,
+                        borderDash: [5, 5], // Kesikli çizgi
+                        tension: 0.1,
+                        pointRadius: 2 // Fon noktalarını daha küçük yapalım
+                    });
+                });
+            }
+
             const ctx = document.getElementById('historicalLineChart').getContext('2d');
             if (historicalChart) { historicalChart.destroy(); }
-            historicalChart = new Chart(ctx, { type: 'line', data: { labels: data.dates, datasets: [{ label: 'Günlük Portföy Getirisi (%)', data: data.returns, borderColor: 'rgb(54, 162, 235)', backgroundColor: 'rgba(54, 162, 235, 0.5)', borderWidth: 2, tension: 0.1, pointBackgroundColor: data.returns.map(v => v >= 0 ? '#27ae60' : '#c0392b') }] }, options: { responsive: true, plugins: { legend: { display: false }, tooltip: { callbacks: { label: (context) => `Getiri: ${context.raw.toFixed(2)}%` } } }, scales: { y: { title: { display: true, text: 'Günlük Getiri (%)' } }, x: { title: { display: true, text: 'Tarih' } } } } });
+            
+            historicalChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: data.dates,
+                    datasets: datasets // Oluşturduğumuz tüm veri setlerini kullan
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: {
+                            display: showLegend, // Lejantı koşullu olarak göster
+                            position: 'top',
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: (context) => `${context.dataset.label}: ${context.raw.toFixed(2)}%`
+                            }
+                        }
+                    },
+                    scales: {
+                        y: { title: { display: true, text: 'Günlük Getiri (%)' } },
+                        x: { title: { display: true, text: 'Tarih' } }
+                    }
+                }
+            });
+            
+            document.getElementById('result-title').textContent = `"${name}" Portföyü - Son 30 Günlük Getiri Analizi`;
+
         } catch (error) {
             document.getElementById('loader').style.display = 'none';
             document.getElementById('result-content').style.display = 'block';
