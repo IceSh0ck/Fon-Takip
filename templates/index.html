@@ -266,7 +266,6 @@
     }
 
     async function displayPieChartReport(name) {
-        // ... bu fonksiyonda değişiklik yok ...
         document.getElementById('report-title').textContent = `"${name}" Portföy Dağılım Raporu`;
         const response = await fetch(`/get_portfolio/${name}`);
         const portfolio = await response.json();
@@ -280,14 +279,14 @@
         ['options-container', 'form-container', 'result-area', 'comparison-container'].forEach(id => document.getElementById(id).style.display = 'none');
     }
 
-    // YENİ: AĞIRLIK DEĞİŞİM RAPORUNU GÖSTEREN FONKSİYON
+    // --- BU FONKSİYON İSTEK DOĞRULTUSUNDA GÜNCELLENDİ ---
     async function displayWeightChangeReport(name) {
         ['options-container', 'report-container', 'form-container', 'result-area'].forEach(id => document.getElementById(id).style.display = 'none');
         const container = document.getElementById('comparison-container');
         const tableContainer = document.getElementById('comparison-table-container');
         const title = document.getElementById('comparison-title');
         container.style.display = 'block';
-        title.textContent = `"${name}" Portföyü Ağırlık Değişimi Hesaplanıyor...`;
+        title.textContent = `"${name}" Portföy Değişim Raporu Hesaplanıyor...`;
         tableContainer.innerHTML = '<div class="loader"></div>';
 
         try {
@@ -298,33 +297,50 @@
                 throw new Error(data.error || 'Bilinmeyen bir hata oluştu.');
             }
 
-            title.textContent = `"${name}" Portföy Ağırlık Değişim Raporu`;
+            title.textContent = `"${name}" Portföy Değişim Raporu`;
 
             let tableHTML = `
                 <table class="detail-table">
                     <thead>
                         <tr>
-                            <th>Varlık Kodu</th>
-                            <th>Önceki Ağırlık (% - ${data.previous_date_str})</th>
-                            <th>Güncel Ağırlık (% - ${data.current_date_str})</th>
+                            <th rowspan="2" style="vertical-align: middle;">Varlık Kodu</th>
+                            <th colspan="3">Ağırlık Değişimi</th>
+                            <th colspan="3">Adet Değişimi</th>
+                        </tr>
+                        <tr>
+                            <th>Önceki (% - ${data.previous_date_str})</th>
+                            <th>Güncel (% - ${data.current_date_str})</th>
                             <th>Değişim (%)</th>
+                            <th>Önceki Adet</th>
+                            <th>Güncel Adet</th>
+                            <th>Değişim (Adet)</th>
                         </tr>
                     </thead>
                     <tbody>
             `;
 
             data.comparison.forEach(asset => {
-                let changeClass = '';
-                if (asset.change > 0.001) changeClass = 'positive';
-                if (asset.change < -0.001) changeClass = 'negative';
-                const changeSign = asset.change > 0 ? '+' : '';
+                // Ağırlık değişimi için renklendirme
+                let weightChangeClass = '';
+                if (asset.change > 0.001) weightChangeClass = 'positive';
+                if (asset.change < -0.001) weightChangeClass = 'negative';
+                const weightChangeSign = asset.change > 0 ? '+' : '';
+
+                // Adet değişimi için renklendirme
+                let adetChangeClass = '';
+                if (asset.adet_change > 0) adetChangeClass = 'positive';
+                if (asset.adet_change < 0) adetChangeClass = 'negative';
+                const adetChangeSign = asset.adet_change > 0 ? '+' : '';
 
                 tableHTML += `
                     <tr>
-                        <td>${asset.ticker}</td>
+                        <td><b>${asset.ticker}</b></td>
                         <td>${asset.previous_weight.toFixed(2)}%</td>
                         <td>${asset.current_weight.toFixed(2)}%</td>
-                        <td class="${changeClass}">${changeSign}${asset.change.toFixed(2)}%</td>
+                        <td class="${weightChangeClass}">${weightChangeSign}${asset.change.toFixed(2)}%</td>
+                        <td>${asset.previous_adet}</td>
+                        <td>${asset.current_adet}</td>
+                        <td class="${adetChangeClass}">${adetChangeSign}${asset.adet_change}</td>
                     </tr>
                 `;
             });
@@ -344,7 +360,6 @@
         }
     }
 
-    // YENİ: SON DEĞİŞİKLİĞİ GERİ ALAN FONKSİYON
     async function revertPortfolio(name) {
         if (confirm(`"${name}" portföyündeki son değişikliği geri almak istediğinizden emin misiniz? Güncel dağılımınız silinecek ve bir önceki dağılım geri yüklenecektir.`)) {
             try {
@@ -364,9 +379,7 @@
         }
     }
 
-
     async function displayHistoricalReturns(name) {
-        // ... bu fonksiyonda değişiklik yok ...
         showResultArea(true);
         document.getElementById('historical-results-container').style.display = 'block';
         document.getElementById('result-title').textContent = `"${name}" Portföyü - Son 30 Günlük Getiri Hesaplanıyor...`;
@@ -390,7 +403,6 @@
     }
 
     async function showPortfolioEditor(name) {
-        // ... bu fonksiyonda değişiklik yok ...
         const response = await fetch(`/get_portfolio/${name}`);
         const portfolio = await response.json();
         document.getElementById('portfolio-name').value = portfolio.name;
@@ -406,7 +418,6 @@
     }
     
     document.getElementById('save-button').addEventListener('click', async function() {
-        // ... bu fonksiyonda değişiklik yok ...
         const portfolioName = document.getElementById('portfolio-name').value.trim();
         if (!portfolioName) { alert('Lütfen bir portföy adı girin.'); return; }
         const stocks = Array.from(document.querySelectorAll('#stocks-container .stock-row')).map(r => ({ ticker: r.children[0].value.trim().toUpperCase(), weight: r.children[1].value, adet: r.children[2].value }));
@@ -429,7 +440,6 @@
 
     // --- Yardımcı Fonksiyonlar ---
     function generateDeterministicColors(labels) {
-        // ... bu fonksiyonda değişiklik yok ...
         const colors = [];
         for (const label of labels) {
             let hash = 0;
@@ -442,7 +452,6 @@
     }
 
     function showResultArea(isLoading) {
-        // ... bu fonksiyonda değişiklik yok ...
         ['options-container', 'report-container', 'form-container', 'comparison-container'].forEach(id => document.getElementById(id).style.display = 'none');
         document.getElementById('result-area').style.display = 'block';
         
@@ -461,7 +470,6 @@
     }
 
     async function handleCalculate(event) {
-        // ... bu fonksiyonda değişiklik yok ...
         event.preventDefault();
         showResultArea(true);
         const stocks = Array.from(document.querySelectorAll('#stocks-container .stock-row')).map(r => ({ ticker: r.children[0].value, weight: r.children[1].value }));
