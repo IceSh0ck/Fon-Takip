@@ -2,3 +2,4 @@ Flask
 yfinance
 requests
 gunicorn
+supabase
