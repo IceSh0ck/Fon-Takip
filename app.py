@@ -10,7 +10,8 @@ app = Flask(__name__)
 
 PORTFOLIOS_FILE = 'portfolios.json'
 
-# --- Veri Taşıma ve Yükleme Fonksiyonları (Değişiklik yok) ---
+# --- Veri Taşıma ve Yükleme Fonksiyonları (Güvenli versiyon) ---
+
 def migrate_portfolios_if_needed():
     if not os.path.exists(PORTFOLIOS_FILE): return
     try:
@@ -48,7 +49,8 @@ def save_portfolios(portfolios_dict):
 
 migrate_portfolios_if_needed()
 
-# --- Diğer API Endpointleri (Değişiklik yok) ---
+# --- API Endpointleri (Diğerlerinde değişiklik yok) ---
+
 @app.route('/')
 def index():
     return render_template('index.html')
@@ -123,8 +125,8 @@ def calculate():
         except Exception: asset_details.append({'type': 'fund', 'ticker': fund_code, 'daily_change': 0.0, 'weighted_impact': 0.0, 'error': 'Veri alınamadı'})
     return jsonify({'total_change': total_portfolio_change, 'details': asset_details})
 
-### BU BÖLÜM TAMAMEN YENİLENDİ ###
-@app.route('/calculate_historical/<portfolio_name>', methods=['POST']) # GET'ten POST'a çevrildi
+# --- BU FONKSİYON NİHAİ OLARAK DÜZELTİLDİ ---
+@app.route('/calculate_historical/<portfolio_name>', methods=['GET'])
 def calculate_historical(portfolio_name):
     portfolios = load_portfolios()
     portfolio_container = portfolios.get(portfolio_name)
@@ -132,84 +134,62 @@ def calculate_historical(portfolio_name):
     portfolio = portfolio_container.get('current')
     if not portfolio: return jsonify({'error': 'Portföyün güncel versiyonu bulunamadı.'}), 404
 
-    # Frontend'den gelen karşılaştırma fonlarını al
-    request_data = request.get_json()
-    comparison_funds = request_data.get('comparison_funds', [])
-
     end_date, start_date = date.today(), date.today() - timedelta(days=45)
-    sdt_str, fdt_str = start_date.strftime('%d-%m-%Y'), end_date.strftime('%d-%m-%Y')
+    all_assets = portfolio.get('stocks', []) + portfolio.get('funds', [])
+    if not all_assets: return jsonify({'error': 'Portföyde hesaplanacak varlık yok.'}), 400
 
-    # --- KİŞİSEL PORTFÖY GETİRİ HESAPLAMA ---
-    portfolio_prices_df = pd.DataFrame()
+    asset_prices_df = pd.DataFrame()
+    
+    # Adım 1: Hisse verilerini çek
     stocks_in_portfolio = portfolio.get('stocks', [])
     if stocks_in_portfolio:
         stock_tickers_is = [s['ticker'].strip().upper() + '.IS' for s in stocks_in_portfolio]
         try:
-            stock_data = yf.download(stock_tickers_is, start=start_date, end=end_date, progress=False)['Close']
-            portfolio_prices_df = pd.concat([portfolio_prices_df, stock_data], axis=1)
-        except Exception as e: print(f"Hisse senedi verisi alınırken hata: {e}")
+            stock_data = yf.download(stock_tickers_is, start=start_date, end=end_date, progress=False)
+            if not stock_data.empty:
+                close_prices = stock_data['Close'] if len(stock_tickers_is) > 1 else stock_data[['Close']]
+                asset_prices_df = pd.concat([asset_prices_df, close_prices], axis=1)
+        except Exception as e:
+            print(f"Hisse senedi verisi alınırken hata: {e}")
 
+    # Adım 2: Fon verilerini çek
+    sdt_str, fdt_str = start_date.strftime('%d-%m-%Y'), end_date.strftime('%d-%m-%Y')
     for fund in portfolio.get('funds', []):
         fund_code = fund['ticker'].strip().upper()
         try:
             res = requests.get(f"https://www.tefas.gov.tr/api/DB/BindHistoryPrice?sdt={sdt_str}&fdt={fdt_str}&kod={fund_code}", timeout=10)
-            df = pd.DataFrame(res.json())
-            df['Tarih'] = pd.to_datetime(df['Tarih'])
-            df = df.set_index('Tarih')[['BirimPayDegeri']].rename(columns={'BirimPayDegeri': fund_code})
-            portfolio_prices_df = pd.concat([portfolio_prices_df, df], axis=1)
-        except Exception as e: print(f"Portföy fon verisi alınırken hata ({fund_code}): {e}")
-    
-    portfolio_daily_returns_series = pd.Series(dtype=float)
-    if not portfolio_prices_df.empty:
-        portfolio_prices_df.columns = portfolio_prices_df.columns.str.replace('.IS', '', regex=False)
-        portfolio_prices_df = portfolio_prices_df.ffill().dropna(how='all')
-        daily_returns = portfolio_prices_df.pct_change()
-        all_assets = portfolio.get('stocks', []) + portfolio.get('funds', [])
-        weights_dict = {asset['ticker'].strip().upper(): float(asset['weight']) / 100 for asset in all_assets}
-        aligned_weights = pd.Series(weights_dict).reindex(daily_returns.columns).fillna(0)
-        portfolio_daily_returns_series = (daily_returns * aligned_weights).sum(axis=1) * 100
-
-    # --- KARŞILAŞTIRMA FONLARI GETİRİ HESAPLAMA ---
-    comparison_returns_series = pd.Series(dtype=float)
-    if comparison_funds:
-        comparison_prices_df = pd.DataFrame()
-        for fund_code in comparison_funds:
-            try:
-                res = requests.get(f"https://www.tefas.gov.tr/api/DB/BindHistoryPrice?sdt={sdt_str}&fdt={fdt_str}&kod={fund_code}", timeout=10)
-                df = pd.DataFrame(res.json())
+            fund_data = res.json()
+            if fund_data:
+                df = pd.DataFrame(fund_data)
                 df['Tarih'] = pd.to_datetime(df['Tarih'])
                 df = df.set_index('Tarih')[['BirimPayDegeri']].rename(columns={'BirimPayDegeri': fund_code})
-                comparison_prices_df = pd.concat([comparison_prices_df, df], axis=1)
-            except Exception as e: print(f"Karşılaştırma fon verisi alınırken hata ({fund_code}): {e}")
-        
-        if not comparison_prices_df.empty:
-            comparison_prices_df = comparison_prices_df.ffill().dropna(how='all')
-            comparison_daily_returns = comparison_prices_df.pct_change()
-            # Fonların ortalama getirisini al
-            comparison_returns_series = comparison_daily_returns.mean(axis=1) * 100
-
-    # --- VERİLERİ BİRLEŞTİR VE SONUÇLARI HAZIRLA ---
-    final_df = pd.DataFrame({
-        'portfolio_returns': portfolio_daily_returns_series,
-        'comparison_returns': comparison_returns_series
-    }).dropna(how='all')
+                asset_prices_df = pd.concat([asset_prices_df, df], axis=1)
+        except Exception as e: print(f"Fon verisi alınırken hata ({fund_code}): {e}")
     
-    if final_df.empty: return jsonify({'error': 'Tarihsel veri bulunamadı.'}), 400
-
-    last_30_days_df = final_df.tail(30)
+    if asset_prices_df.empty: return jsonify({'error': 'Tarihsel veri bulunamadı.'}), 400
     
-    # NaN değerleri null'a çevirerek JSON uyumlu hale getir
-    last_30_days_df = last_30_days_df.where(pd.notnull(last_30_days_df), None)
-
-    response_data = {
-        'dates': last_30_days_df.index.strftime('%d.%m.%Y').tolist(),
-        'portfolio_returns': last_30_days_df['portfolio_returns'].tolist(),
-        'comparison_returns': last_30_days_df['comparison_returns'].tolist() if comparison_funds else None
-    }
+    # DÜZELTME: Sütun isimlerindeki '.IS' uzantısını kaldırarak isimleri eşleştir.
+    # Bu, hatanın ana kaynağıydı.
+    asset_prices_df.columns = asset_prices_df.columns.str.replace('.IS', '', regex=False)
     
-    return jsonify(response_data)
+    # Adım 3: Getirileri hesapla
+    asset_prices_df = asset_prices_df.ffill().dropna(how='all')
+    daily_returns = asset_prices_df.pct_change()
 
-# --- Diğer API Endpointleri (Değişiklik yok) ---
+    weights_dict = {asset['ticker'].strip().upper(): float(asset['weight']) / 100 for asset in all_assets}
+    
+    # Ağırlık serisini DataFrame sütunlarıyla eşleştir
+    aligned_weights = pd.Series(weights_dict).reindex(daily_returns.columns).fillna(0)
+
+    portfolio_daily_returns = (daily_returns * aligned_weights).sum(axis=1) * 100
+    valid_returns = portfolio_daily_returns.dropna()
+    
+    # Son 30 günü al ve döndür
+    dates = valid_returns.index.strftime('%d.%m.%Y').tolist()[-30:]
+    returns = valid_returns.tolist()[-30:]
+    
+    return jsonify({'dates': dates, 'returns': returns})
+
 @app.route('/compare_versions/<portfolio_name>', methods=['GET'])
 def compare_versions(portfolio_name):
     portfolios = load_portfolios()
