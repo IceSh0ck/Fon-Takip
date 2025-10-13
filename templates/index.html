@@ -66,7 +66,7 @@
             <div class="options-menu">
                 <button id="btn-show-report">1. Portföy Dağılım Raporunu Gör</button>
                 <button id="btn-show-comparison">2. Portföy Ağırlık Değişim Raporu</button>
-                <button id="btn-show-historical">3. Son 30 Günlük Portföy Getirisi</button>
+                <button id="btn-show-historical">3. Son 30 Günlük Getiri Grafiği</button>
                 <button id="btn-edit-portfolio">4. Portföy Dağılımını Değiştir</button>
             </div>
         </div>
@@ -78,8 +78,7 @@
         <div class="container" id="comparison-container" style="display: none;">
             <a href="#" class="back-button" title="Seçeneklere Geri Dön">&larr;</a>
             <h2 id="comparison-title" style="text-align:center;"></h2>
-            <div id="comparison-table-container">
-                </div>
+            <div id="comparison-table-container"></div>
         </div>
         <div class="container" id="form-container" style="display: block;">
             <a href="#" class="back-button" title="Seçeneklere Geri Dön" style="display: none;">&larr;</a>
@@ -115,8 +114,8 @@
     let historicalChart = null;
     let isDeleteMode = false;
 
-    document.addEventListener('DOMContentLoaded', () => { 
-        loadPortfolios(); 
+    document.addEventListener('DOMContentLoaded', () => {    
+        loadPortfolios();    
         document.querySelectorAll('.back-button').forEach(button => {
             button.onclick = (e) => {
                 e.preventDefault();
@@ -131,6 +130,8 @@
         document.getElementById('portfolio-form').addEventListener('submit', handleCalculate);
     });
     
+    // --- Diğer JS fonksiyonları (çoğunlukla değişiklik yok) ---
+
     function toggleDeleteMode() {
         isDeleteMode = !isDeleteMode;
         const deleteButton = document.getElementById('btn-delete-mode');
@@ -234,6 +235,7 @@
     }
     
     async function fetchAndDisplayLiveReturn(name) {
+        // ... bu fonksiyonda değişiklik yok ...
         const displayDiv = document.getElementById('live-return-display');
         const noticeDiv = document.getElementById('live-return-notice');
         displayDiv.textContent = 'Anlık getiri hesaplanıyor...';
@@ -279,9 +281,9 @@
         document.getElementById('report-container').style.display = 'block';
         ['options-container', 'form-container', 'result-area', 'comparison-container'].forEach(id => document.getElementById(id).style.display = 'none');
     }
-
-    // YENİ: AĞIRLIK DEĞİŞİM RAPORUNU GÖSTEREN FONKSİYON
+    
     async function displayWeightChangeReport(name) {
+        // ... bu fonksiyonda değişiklik yok ...
         ['options-container', 'report-container', 'form-container', 'result-area'].forEach(id => document.getElementById(id).style.display = 'none');
         const container = document.getElementById('comparison-container');
         const tableContainer = document.getElementById('comparison-table-container');
@@ -293,49 +295,17 @@
         try {
             const response = await fetch(`/compare_versions/${name}`);
             const data = await response.json();
-
-            if (!response.ok) {
-                throw new Error(data.error || 'Bilinmeyen bir hata oluştu.');
-            }
-
+            if (!response.ok) { throw new Error(data.error || 'Bilinmeyen bir hata oluştu.'); }
             title.textContent = `"${name}" Portföy Ağırlık Değişim Raporu`;
-
-            let tableHTML = `
-                <table class="detail-table">
-                    <thead>
-                        <tr>
-                            <th>Varlık Kodu</th>
-                            <th>Önceki Ağırlık (% - ${data.previous_date_str})</th>
-                            <th>Güncel Ağırlık (% - ${data.current_date_str})</th>
-                            <th>Değişim (%)</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-            `;
-
+            let tableHTML = `<table class="detail-table"><thead><tr><th>Varlık Kodu</th><th>Önceki Ağırlık (% - ${data.previous_date_str})</th><th>Güncel Ağırlık (% - ${data.current_date_str})</th><th>Değişim (%)</th></tr></thead><tbody>`;
             data.comparison.forEach(asset => {
-                let changeClass = '';
-                if (asset.change > 0.001) changeClass = 'positive';
-                if (asset.change < -0.001) changeClass = 'negative';
+                let changeClass = asset.change > 0.001 ? 'positive' : (asset.change < -0.001 ? 'negative' : '');
                 const changeSign = asset.change > 0 ? '+' : '';
-
-                tableHTML += `
-                    <tr>
-                        <td>${asset.ticker}</td>
-                        <td>${asset.previous_weight.toFixed(2)}%</td>
-                        <td>${asset.current_weight.toFixed(2)}%</td>
-                        <td class="${changeClass}">${changeSign}${asset.change.toFixed(2)}%</td>
-                    </tr>
-                `;
+                tableHTML += `<tr><td>${asset.ticker}</td><td>${asset.previous_weight.toFixed(2)}%</td><td>${asset.current_weight.toFixed(2)}%</td><td class="${changeClass}">${changeSign}${asset.change.toFixed(2)}%</td></tr>`;
             });
             tableHTML += '</tbody></table>';
-            
-            // "Geri Al" butonu ekle
             tableHTML += `<button type="button" class="btn-revert" id="revert-button">Son Değişikliği Geri Al</button>`;
-            
             tableContainer.innerHTML = tableHTML;
-
-            // Butonun olay dinleyicisini ata
             document.getElementById('revert-button').onclick = () => revertPortfolio(name);
 
         } catch (error) {
@@ -343,44 +313,109 @@
             tableContainer.innerHTML = `<div id="total-result" class="negative">Hata: ${error.message}</div>`;
         }
     }
-
-    // YENİ: SON DEĞİŞİKLİĞİ GERİ ALAN FONKSİYON
+    
     async function revertPortfolio(name) {
+        // ... bu fonksiyonda değişiklik yok ...
         if (confirm(`"${name}" portföyündeki son değişikliği geri almak istediğinizden emin misiniz? Güncel dağılımınız silinecek ve bir önceki dağılım geri yüklenecektir.`)) {
             try {
                 const response = await fetch(`/revert_portfolio/${name}`, { method: 'POST' });
                 const result = await response.json();
                 if (response.ok) {
                     alert(result.success);
-                    // Kullanıcıyı portföyün seçenekler ekranına geri yönlendir
                     const activeLi = document.querySelector(`#portfolio-list li[data-name="${name}"]`);
                     showOptions(name, activeLi);
-                } else {
-                    throw new Error(result.error);
-                }
+                } else { throw new Error(result.error); }
             } catch (error) {
                 alert('Geri alma işlemi sırasında bir hata oluştu: ' + error.message);
             }
         }
     }
 
-
+    ### BU FONKSİYON TAMAMEN YENİLENDİ ###
     async function displayHistoricalReturns(name) {
-        // ... bu fonksiyonda değişiklik yok ...
+        // Adım 1: Kullanıcıdan karşılaştırma fonlarını al
+        const comparisonFundsInput = prompt("Karşılaştırmak istediğiniz fon kodlarını aralarına virgül koyarak girin (örn: AFA,TGE,YAS). İstemiyorsanız boş bırakın.", "");
+        const comparisonFunds = comparisonFundsInput 
+            ? comparisonFundsInput.split(',').map(f => f.trim().toUpperCase()).filter(f => f) 
+            : [];
+
+        // Adım 2: Gerekli UI elemanlarını göster
         showResultArea(true);
         document.getElementById('historical-results-container').style.display = 'block';
-        document.getElementById('result-title').textContent = `"${name}" Portföyü - Son 30 Günlük Getiri Hesaplanıyor...`;
+        document.getElementById('result-title').textContent = `"${name}" Portföyü için veriler hesaplanıyor...`;
+
         try {
-            const response = await fetch(`/calculate_historical/${name}`);
+            // Adım 3: Backend'e POST isteği gönder
+            const response = await fetch(`/calculate_historical/${name}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ comparison_funds: comparisonFunds })
+            });
             const data = await response.json();
             if (!response.ok) { throw new Error(data.error || 'Bilinmeyen bir hata oluştu.'); }
             
             document.getElementById('loader').style.display = 'none';
             document.getElementById('result-content').style.display = 'block';
             document.getElementById('result-title').textContent = `"${name}" Portföyü - Son 30 Günlük Getiri Grafiği`;
+            
+            // Adım 4: Gelen verilerle Chart.js grafiğini oluştur
             const ctx = document.getElementById('historicalLineChart').getContext('2d');
             if (historicalChart) { historicalChart.destroy(); }
-            historicalChart = new Chart(ctx, { type: 'line', data: { labels: data.dates, datasets: [{ label: 'Günlük Portföy Getirisi (%)', data: data.returns, borderColor: 'rgb(54, 162, 235)', backgroundColor: 'rgba(54, 162, 235, 0.5)', borderWidth: 2, tension: 0.1, pointBackgroundColor: data.returns.map(v => v >= 0 ? '#27ae60' : '#c0392b') }] }, options: { responsive: true, plugins: { legend: { display: false }, tooltip: { callbacks: { label: (context) => `Getiri: ${context.raw.toFixed(2)}%` } } }, scales: { y: { title: { display: true, text: 'Günlük Getiri (%)' } }, x: { title: { display: true, text: 'Tarih' } } } } });
+
+            // Grafik için veri setlerini (datasets) oluştur
+            const datasets = [{
+                label: `"${name}" Portföy Getirisi (%)`,
+                data: data.portfolio_returns,
+                borderColor: 'dodgerblue',
+                backgroundColor: 'rgba(30, 144, 255, 0.1)',
+                borderWidth: 2.5,
+                tension: 0.1,
+                pointRadius: 3,
+                pointBackgroundColor: (data.portfolio_returns || []).map(v => v === null ? 'grey' : (v >= 0 ? '#27ae60' : '#c0392b'))
+            }];
+
+            // Eğer karşılaştırma verisi varsa, ikinci veri setini ekle
+            if (data.comparison_returns) {
+                datasets.push({
+                    label: 'Karşılaştırılan Fonlar Ort. Getirisi (%)',
+                    data: data.comparison_returns,
+                    borderColor: 'darkorange',
+                    backgroundColor: 'rgba(255, 140, 0, 0.1)',
+                    borderWidth: 2,
+                    borderDash: [5, 5], // Kesikli çizgi
+                    tension: 0.1,
+                    pointRadius: 3,
+                    pointBackgroundColor: (data.comparison_returns || []).map(v => v === null ? 'grey' : (v >= 0 ? '#27ae60' : '#c0392b'))
+                });
+            }
+
+            historicalChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: data.dates,
+                    datasets: datasets
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: true, position: 'top' }, // Legend'i göster
+                        tooltip: {
+                            callbacks: {
+                                label: (context) => `${context.dataset.label}: ${context.raw ? context.raw.toFixed(2) : 'N/A'}%`
+                            }
+                        }
+                    },
+                    scales: {
+                        y: { title: { display: true, text: 'Günlük Getiri (%)' } },
+                        x: { title: { display: true, text: 'Tarih' } }
+                    },
+                    interaction: { // Fare ile üzerine gelince etkileşimi iyileştir
+                        intersect: false,
+                        mode: 'index',
+                    }
+                }
+            });
         } catch (error) {
             document.getElementById('loader').style.display = 'none';
             document.getElementById('result-content').style.display = 'block';
@@ -427,9 +462,8 @@
         }
     });
 
-    // --- Yardımcı Fonksiyonlar ---
+    // --- Yardımcı Fonksiyonlar (değişiklik yok) ---
     function generateDeterministicColors(labels) {
-        // ... bu fonksiyonda değişiklik yok ...
         const colors = [];
         for (const label of labels) {
             let hash = 0;
@@ -442,7 +476,6 @@
     }
 
     function showResultArea(isLoading) {
-        // ... bu fonksiyonda değişiklik yok ...
         ['options-container', 'report-container', 'form-container', 'comparison-container'].forEach(id => document.getElementById(id).style.display = 'none');
         document.getElementById('result-area').style.display = 'block';
         
@@ -461,7 +494,6 @@
     }
 
     async function handleCalculate(event) {
-        // ... bu fonksiyonda değişiklik yok ...
         event.preventDefault();
         showResultArea(true);
         const stocks = Array.from(document.querySelectorAll('#stocks-container .stock-row')).map(r => ({ ticker: r.children[0].value, weight: r.children[1].value }));
