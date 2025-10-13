@@ -5,13 +5,34 @@ import yfinance as yf
 import requests
 from datetime import date, timedelta, datetime
 import pandas as pd
-from collections import defaultdict
 
 app = Flask(__name__)
 
 PORTFOLIOS_FILE = 'portfolios.json'
 
-# --- Veri Yükleme/Kaydetme Fonksiyonları (Değişiklik yok) ---
+# --- Veri Taşıma ve Yükleme Fonksiyonları (Değişiklik yok) ---
+def migrate_portfolios_if_needed():
+    if not os.path.exists(PORTFOLIOS_FILE): return
+    try:
+        with open(PORTFOLIOS_FILE, 'r+', encoding='utf-8') as f:
+            first_char = f.read(1)
+            if not first_char: return
+            f.seek(0)
+            data = json.load(f)
+            if isinstance(data, list):
+                print("Eski portföy formatı algılandı, yeni formata geçiriliyor...")
+                new_portfolios_dict = {}
+                for portfolio in data:
+                    portfolio_name = portfolio.get('name')
+                    if portfolio_name:
+                        new_portfolios_dict[portfolio_name] = {'current': portfolio, 'history': []}
+                f.seek(0)
+                f.truncate()
+                json.dump(new_portfolios_dict, f, indent=4, ensure_ascii=False)
+                print("Portföy formatı başarıyla güncellendi.")
+    except (json.JSONDecodeError, Exception) as e:
+        print(f"Portföy dosyası okunurken veya taşınırken hata oluştu: {e}")
+
 def load_portfolios():
     if not os.path.exists(PORTFOLIOS_FILE): return {}
     try:
@@ -25,156 +46,60 @@ def save_portfolios(portfolios_dict):
     with open(PORTFOLIOS_FILE, 'w', encoding='utf-8') as f:
         json.dump(portfolios_dict, f, indent=4, ensure_ascii=False)
 
+migrate_portfolios_if_needed()
+
 # --- API Endpointleri ---
 
 @app.route('/')
 def index():
     return render_template('index.html')
 
-# GÜNCELLENDİ: Artık fonları kategorilerine göre gruplayıp gönderiyor.
 @app.route('/get_portfolios', methods=['GET'])
 def get_portfolios():
     portfolios = load_portfolios()
-    categorized_portfolios = defaultdict(list)
-    for name, data in portfolios.items():
-        # Kategori bilgisi olmayan eski kayıtlar için varsayılan kategori 'owned'
-        category = data.get('current', {}).get('category', 'owned')
-        categorized_portfolios[category].append(name)
-    
-    # İsimleri sırala
-    categorized_portfolios['owned'].sort()
-    categorized_portfolios['tracked'].sort()
-    
-    return jsonify(categorized_portfolios)
+    return jsonify(sorted(list(portfolios.keys())))
 
 @app.route('/get_portfolio/<portfolio_name>', methods=['GET'])
 def get_portfolio(portfolio_name):
-    # Bu fonksiyonda değişiklik yok
     portfolios = load_portfolios()
     portfolio_data = portfolios.get(portfolio_name)
     if portfolio_data and 'current' in portfolio_data:
         return jsonify(portfolio_data['current'])
-    return jsonify({'error': 'Fon bulunamadı'}), 404
+    return jsonify({'error': 'Portföy bulunamadı'}), 404
 
-# GÜNCELLENDİ: Artık 'category' bilgisini de kaydediyor.
+# GÜNCELLENDİ: Artık sadece tarih değil, tam zaman damgası (timestamp) kaydediliyor.
 @app.route('/save_portfolio', methods=['POST'])
 def save_portfolio():
     data = request.get_json()
     portfolio_name = data.get('name')
     stocks = data.get('stocks', [])
     funds = data.get('funds', [])
-    category = data.get('category', 'owned') # 'owned' veya 'tracked'
-
     if not portfolio_name or (not stocks and not funds):
-        return jsonify({'error': 'Fon adı ve en az bir varlık girilmelidir'}), 400
-        
+        return jsonify({'error': 'Portföy adı ve en az bir varlık girilmelidir'}), 400
     portfolios = load_portfolios()
     portfolio_container = portfolios.get(portfolio_name, {'current': None, 'history': []})
     
     if portfolio_container.get('current'):
         previous_version = portfolio_container['current']
+        # Sadece tarih yerine tam tarih ve saat bilgisi ekleniyor.
         previous_version['save_timestamp'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        if 'save_date' in previous_version: del previous_version['save_date']
+        # Eski 'save_date' anahtarını (varsa) kaldır
+        if 'save_date' in previous_version:
+            del previous_version['save_date']
+        
         portfolio_container['history'].insert(0, previous_version)
+        # Sadece son 5 değişikliği sakla
         portfolio_container['history'] = portfolio_container['history'][:5]
 
-    new_current_version = {
-        'name': portfolio_name, 
-        'stocks': stocks, 
-        'funds': funds,
-        'category': category # Kategori bilgisi eklendi
-    }
+    new_current_version = {'name': portfolio_name, 'stocks': stocks, 'funds': funds}
     portfolio_container['current'] = new_current_version
     portfolios[portfolio_name] = portfolio_container
     save_portfolios(portfolios)
-    return jsonify({'success': f'"{portfolio_name}" fonu başarıyla kaydedildi.'})
+    return jsonify({'success': f'"{portfolio_name}" portföyü başarıyla kaydedildi.'})
 
-
-# YENİ FONKSİYON: Tüm kayıtlı fonların anlık getirilerini hesaplar.
-@app.route('/get_all_returns', methods=['GET'])
-def get_all_returns():
-    portfolios = load_portfolios()
-    all_returns = []
-
-    if not portfolios:
-        return jsonify([])
-
-    for name, data in portfolios.items():
-        if 'current' not in data:
-            continue
-        
-        current_portfolio = data['current']
-        stocks = current_portfolio.get('stocks', [])
-        funds = current_portfolio.get('funds', [])
-        category = current_portfolio.get('category', 'owned')
-        total_change = 0.0
-
-        # Hisse getirilerini hesapla
-        for stock in stocks:
-            ticker, weight = stock.get('ticker').strip().upper(), float(stock.get('weight', 0))
-            if ticker in ['NAKIT', 'CASH', 'TAHVIL', 'BOND', 'DEVLET TAHVILI']:
-                continue
-            yf_ticker = ticker + '.IS' if not ticker.endswith('.IS') else ticker
-            try:
-                hist = yf.Ticker(yf_ticker).history(period="2d")
-                if len(hist) >= 2:
-                    daily_change = (hist['Close'].iloc[-1] - hist['Close'].iloc[-2]) / hist['Close'].iloc[-2] * 100
-                    total_change += (weight / 100) * daily_change
-            except Exception:
-                pass # Hata olursa bu hisseyi atla
-        
-        # Fon getirilerini hesapla
-        sdt = (date.today() - timedelta(days=10)).strftime('%d-%m-%Y')
-        fdt = date.today().strftime('%d-%m-%Y')
-        for fund in funds:
-            fund_code, weight = fund.get('ticker').strip().upper(), float(fund.get('weight', 0))
-            try:
-                res = requests.get(f"https://www.tefas.gov.tr/api/DB/BindHistoryPrice?sdt={sdt}&fdt={fdt}&kod={fund_code}", timeout=10)
-                res.raise_for_status()
-                fund_data = [i for i in res.json() if i.get('BirimPayDegeri') is not None]
-                if len(fund_data) >= 2:
-                    last, prev = fund_data[-1], fund_data[-2]
-                    daily_change = (last['BirimPayDegeri'] - prev['BirimPayDegeri']) / prev['BirimPayDegeri'] * 100
-                    total_change += (weight / 100) * daily_change
-            except Exception:
-                pass # Hata olursa bu fonu atla
-        
-        all_returns.append({
-            'name': name,
-            'category': category,
-            'change': total_change
-        })
-    
-    # Çoktan aza doğru sırala
-    sorted_returns = sorted(all_returns, key=lambda x: x['change'], reverse=True)
-    return jsonify(sorted_returns)
-
-
-@app.route('/get_portfolio_history/<portfolio_name>', methods=['GET'])
-def get_portfolio_history(portfolio_name):
-    # Bu fonksiyonda değişiklik yok
-    portfolios = load_portfolios()
-    portfolio_data = portfolios.get(portfolio_name)
-    if not portfolio_data or not portfolio_data.get('current'):
-        return jsonify({'error': 'Fon veya geçmişi bulunamadı.'}), 400
-    for entry in portfolio_data.get('history', []):
-        if 'save_timestamp' in entry:
-            try:
-                dt_obj = datetime.strptime(entry['save_timestamp'], '%Y-%m-%d %H:%M:%S')
-                entry['display_timestamp'] = dt_obj.strftime('%d.%m.%Y %H:%M')
-            except ValueError:
-                entry['display_timestamp'] = entry['save_timestamp']
-    return jsonify(portfolio_data)
-
-
-# Diğer fonksiyonlar (calculate, calculate_historical, revert, delete) aynı kalabilir.
-# Bu yüzden onları buraya eklemiyorum, kodunuzda olduğu gibi bırakabilirsiniz.
-# ... (calculate, calculate_historical, revert_portfolio, delete_portfolio fonksiyonlarınız burada) ...
-
-# Önemli: Diğer fonksiyonlar (calculate, calculate_historical, revert_portfolio, delete_portfolio, vb.)
-# bir önceki cevaptaki gibi kalmalıdır. Onları silmeyin.
 @app.route('/calculate', methods=['POST'])
 def calculate():
+    # Bu fonksiyonda değişiklik yok
     data = request.get_json()
     stocks = data.get('stocks', [])
     funds = data.get('funds', [])
@@ -195,7 +120,8 @@ def calculate():
     today, sdt = date.today(), (date.today() - timedelta(days=10)).strftime('%d-%m-%Y')
     fdt = today.strftime('%d-%m-%Y')
     for fund in funds:
-        fund_code, weight = fund.get('ticker').strip().upper(), float(fund.get('weight', 0))
+        fund_code, weight = fund.get('ticker').strip().upper(), float(fund.get('weight',
+                                                                                0))
         try:
             res = requests.get(f"https://www.tefas.gov.tr/api/DB/BindHistoryPrice?sdt={sdt}&fdt={fdt}&kod={fund_code}", timeout=10)
             res.raise_for_status()
@@ -212,6 +138,7 @@ def calculate():
 
 @app.route('/calculate_historical/<portfolio_name>', methods=['GET'])
 def calculate_historical(portfolio_name):
+    # Bu fonksiyonda değişiklik yok
     portfolios = load_portfolios()
     portfolio_container = portfolios.get(portfolio_name)
     if not portfolio_container: return jsonify({'error': 'Portföy bulunamadı'}), 404
@@ -255,16 +182,40 @@ def calculate_historical(portfolio_name):
     returns = valid_returns.tolist()[-30:]
     return jsonify({'dates': dates, 'returns': returns})
 
+# YENİ FONKSİYON: Eski '/compare_versions' yerine bu kullanılacak.
+# Portföyün güncel halini ve tüm geçmişini (son 5) frontend'e gönderir.
+@app.route('/get_portfolio_history/<portfolio_name>', methods=['GET'])
+def get_portfolio_history(portfolio_name):
+    portfolios = load_portfolios()
+    portfolio_data = portfolios.get(portfolio_name)
+    if not portfolio_data or not portfolio_data.get('current'):
+        return jsonify({'error': 'Portföy veya geçmişi bulunamadı.'}), 400
+    
+    # Tarih ve saat formatını daha okunabilir hale getirip gönder
+    for entry in portfolio_data.get('history', []):
+        if 'save_timestamp' in entry:
+            try:
+                dt_obj = datetime.strptime(entry['save_timestamp'], '%Y-%m-%d %H:%M:%S')
+                entry['display_timestamp'] = dt_obj.strftime('%d.%m.%Y %H:%M')
+            except ValueError:
+                entry['display_timestamp'] = entry['save_timestamp'] # Format hatalıysa orijinali göster
+
+    return jsonify(portfolio_data)
+
+
 @app.route('/revert_portfolio/<portfolio_name>', methods=['POST'])
 def revert_portfolio(portfolio_name):
     portfolios = load_portfolios()
     portfolio_data = portfolios.get(portfolio_name)
     if not portfolio_data or not portfolio_data.get('history'):
         return jsonify({'error': 'Geri alınacak bir önceki versiyon bulunamadı.'}), 400
+    
     last_history_item = portfolio_data['history'].pop(0)
+    # Geri alınan versiyondaki zaman damgalarını temizle
     if 'save_timestamp' in last_history_item: del last_history_item['save_timestamp']
     if 'display_timestamp' in last_history_item: del last_history_item['display_timestamp']
     if 'save_date' in last_history_item: del last_history_item['save_date']
+
     portfolio_data['current'] = last_history_item
     portfolios[portfolio_name] = portfolio_data
     save_portfolios(portfolios)
@@ -272,6 +223,7 @@ def revert_portfolio(portfolio_name):
 
 @app.route('/delete_portfolio', methods=['POST'])
 def delete_portfolio():
+    # Bu fonksiyonda değişiklik yok
     data = request.get_json()
     portfolio_name_to_delete = data.get('name')
     if not portfolio_name_to_delete: return jsonify({'error': 'Silinecek portföy adı belirtilmedi.'}), 400
@@ -279,9 +231,9 @@ def delete_portfolio():
     if portfolio_name_to_delete in portfolios:
         del portfolios[portfolio_name_to_delete]
         save_portfolios(portfolios)
-        return jsonify({'success': f'"{portfolio_name_to_delete}" fonu başarıyla silindi.'})
+        return jsonify({'success': f'"{portfolio_name_to_delete}" portföyü başarıyla silindi.'})
     else:
-        return jsonify({'error': 'Silinecek fon bulunamadı.'}), 404
+        return jsonify({'error': 'Silinecek portföy bulunamadı.'}), 404
 
 if __name__ == '__main__':
     app.run(debug=True)
