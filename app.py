@@ -125,7 +125,6 @@ def calculate():
         except Exception: asset_details.append({'type': 'fund', 'ticker': fund_code, 'daily_change': 0.0, 'weighted_impact': 0.0, 'error': 'Veri alınamadı'})
     return jsonify({'total_change': total_portfolio_change, 'details': asset_details})
 
-# --- BU FONKSİYON NİHAİ OLARAK DÜZELTİLDİ ---
 @app.route('/calculate_historical/<portfolio_name>', methods=['GET'])
 def calculate_historical(portfolio_name):
     portfolios = load_portfolios()
@@ -168,8 +167,6 @@ def calculate_historical(portfolio_name):
     
     if asset_prices_df.empty: return jsonify({'error': 'Tarihsel veri bulunamadı.'}), 400
     
-    # DÜZELTME: Sütun isimlerindeki '.IS' uzantısını kaldırarak isimleri eşleştir.
-    # Bu, hatanın ana kaynağıydı.
     asset_prices_df.columns = asset_prices_df.columns.str.replace('.IS', '', regex=False)
     
     # Adım 3: Getirileri hesapla
@@ -178,7 +175,6 @@ def calculate_historical(portfolio_name):
 
     weights_dict = {asset['ticker'].strip().upper(): float(asset['weight']) / 100 for asset in all_assets}
     
-    # Ağırlık serisini DataFrame sütunlarıyla eşleştir
     aligned_weights = pd.Series(weights_dict).reindex(daily_returns.columns).fillna(0)
 
     portfolio_daily_returns = (daily_returns * aligned_weights).sum(axis=1) * 100
@@ -190,22 +186,60 @@ def calculate_historical(portfolio_name):
     
     return jsonify({'dates': dates, 'returns': returns})
 
+# --- BU FONKSİYON İSTEK DOĞRULTUSUNDA GÜNCELLENDİ ---
 @app.route('/compare_versions/<portfolio_name>', methods=['GET'])
 def compare_versions(portfolio_name):
     portfolios = load_portfolios()
     portfolio_data = portfolios.get(portfolio_name)
     if not portfolio_data or not portfolio_data.get('current') or not portfolio_data.get('history'):
         return jsonify({'error': 'Karşılaştırma için yeterli geçmiş veri bulunamadı.'}), 400
-    current_version, previous_version = portfolio_data['current'], portfolio_data['history'][0]
-    current_assets = {a['ticker'].upper(): float(a['weight']) for a in current_version.get('stocks', []) + current_version.get('funds', [])}
-    previous_assets = {a['ticker'].upper(): float(a['weight']) for a in previous_version.get('stocks', []) + previous_version.get('funds', [])}
+    
+    current_version = portfolio_data['current']
+    previous_version = portfolio_data['history'][0]
+
+    # Yardımcı fonksiyon: Varlığı ağırlık ve adet içeren bir sözlüğe çevirir
+    def asset_to_dict(asset):
+        try:
+            # 'adet' boş string veya None ise 0 olarak kabul et
+            adet = int(asset.get('adet') or 0)
+        except (ValueError, TypeError):
+            adet = 0 # Sayıya çevrilemezse güvenli varsayılan
+        return {
+            'weight': float(asset.get('weight', 0)),
+            'adet': adet
+        }
+
+    # Hem ağırlık hem de adet bilgilerini içeren sözlükler oluştur
+    current_assets = {a['ticker'].upper(): asset_to_dict(a) for a in current_version.get('stocks', []) + current_version.get('funds', [])}
+    previous_assets = {a['ticker'].upper(): asset_to_dict(a) for a in previous_version.get('stocks', []) + previous_version.get('funds', [])}
+
     all_tickers = sorted(list(set(current_assets.keys()) | set(previous_assets.keys())))
+    
     comparison_data = []
+    default_asset = {'weight': 0.0, 'adet': 0} # Varlık bulunamazsa kullanılacak varsayılan değer
+
     for ticker in all_tickers:
-        current, previous = current_assets.get(ticker, 0.0), previous_assets.get(ticker, 0.0)
-        comparison_data.append({'ticker': ticker, 'previous_weight': previous, 'current_weight': current, 'change': current - previous})
+        current_data = current_assets.get(ticker, default_asset)
+        previous_data = previous_assets.get(ticker, default_asset)
+        
+        comparison_data.append({
+            'ticker': ticker,
+            'previous_weight': previous_data['weight'],
+            'current_weight': current_data['weight'],
+            'change': current_data['weight'] - previous_data['weight'],
+            'previous_adet': previous_data['adet'],
+            'current_adet': current_data['adet'],
+            'adet_change': current_data['adet'] - previous_data['adet']
+        })
+
+    # Değişime göre sırala (ağırlık değişimi öncelikli)
     comparison_data.sort(key=lambda x: abs(x['change']), reverse=True)
-    response_data = {'comparison': comparison_data, 'current_date_str': date.today().strftime('%d.%m.%Y'), 'previous_date_str': datetime.strptime(previous_version.get('save_date', '1970-01-01'), '%Y-%m-%d').strftime('%d.%m.%Y')}
+    
+    response_data = {
+        'comparison': comparison_data,
+        'current_date_str': date.today().strftime('%d.%m.%Y'),
+        'previous_date_str': datetime.strptime(previous_version.get('save_date', '1970-01-01'), '%Y-%m-%d').strftime('%d.%m.%Y')
+    }
     return jsonify(response_data)
 
 @app.route('/revert_portfolio/<portfolio_name>', methods=['POST'])
