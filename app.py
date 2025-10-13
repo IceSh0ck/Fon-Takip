@@ -236,4 +236,6 @@ def delete_portfolio():
         return jsonify({'error': 'Silinecek portföy bulunamadı.'}), 404
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    # app.run(debug=True)  <-- Bu satırı yorum satırı yapın veya silin
+    app.run(debug=False) # Veya basitçe app.run() yazın
+
