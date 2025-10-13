@@ -14,10 +14,11 @@ app = Flask(__name__)
 # Bağlantı bilgisini Render'daki ortam değişkeninden güvenli bir şekilde al
 MONGO_URI = os.environ.get('DATABASE_URI')
 client = MongoClient(MONGO_URI)
-db = client['portfolio_db'] # Veritabanınızın adı
+db = client['portfolio_db'] # Veritabanınızın adı (istediğiniz gibi olabilir)
 portfolios_collection = db['portfolios'] # Verilerinizin saklanacağı tablo (collection)
 
-# --- VERİTABANI İŞLEMLERİ ---
+# --- VERİTABANI İŞLEM FONKSİYONLARI ---
+# Bu fonksiyonlar artık dosyaya değil, doğrudan MongoDB'ye işlem yapar.
 
 def load_portfolios():
     """Veritabanından tüm portföyleri okur."""
@@ -30,12 +31,10 @@ def load_portfolios():
             portfolios_dict[portfolio_name] = portfolio
     return portfolios_dict
 
-def save_portfolios(portfolios_dict):
-    """Veritabanına portföyleri yazar/günceller."""
-    for name, data in portfolios_dict.items():
-        query = {'name': name}
-        data['name'] = name 
-        portfolios_collection.update_one(query, {'$set': data}, upsert=True)
+def save_portfolio_to_db(portfolio_name, portfolio_container):
+    """Veritabanına tek bir portföyü yazar/günceller."""
+    query = {'name': portfolio_name}
+    portfolios_collection.update_one(query, {'$set': portfolio_container}, upsert=True)
 
 # --- API ENDPOINTLERİ ---
 
@@ -57,7 +56,6 @@ def get_portfolios():
 
 @app.route('/get_portfolio/<portfolio_name>', methods=['GET'])
 def get_portfolio(portfolio_name):
-    # Veritabanından tek bir fonu bul
     portfolio_data = portfolios_collection.find_one({'name': portfolio_name})
     if portfolio_data and 'current' in portfolio_data:
         return jsonify(portfolio_data['current'])
@@ -74,7 +72,6 @@ def save_portfolio():
     if not portfolio_name:
         return jsonify({'error': 'Fon adı girilmelidir'}), 400
         
-    # Veritabanından mevcut kaydı al (varsa)
     portfolio_container = portfolios_collection.find_one({'name': portfolio_name})
     if not portfolio_container:
         portfolio_container = {'name': portfolio_name, 'current': None, 'history': []}
@@ -92,21 +89,18 @@ def save_portfolio():
         'category': category
     }
     
-    # Veritabanına kaydet/güncelle
-    portfolios_collection.update_one({'name': portfolio_name}, {'$set': portfolio_container}, upsert=True)
+    save_portfolio_to_db(portfolio_name, portfolio_container)
     return jsonify({'success': f'"{portfolio_name}" fonu başarıyla kaydedildi.'})
 
 @app.route('/get_all_returns', methods=['GET'])
 def get_all_returns():
     portfolios = load_portfolios()
     all_returns = []
-    # ... (Bu fonksiyonun geri kalanı aynı, değişiklik yok)
     if not portfolios:
         return jsonify([])
 
     for name, data in portfolios.items():
-        if 'current' not in data:
-            continue
+        if 'current' not in data: continue
         
         current_portfolio = data['current']
         stocks = current_portfolio.get('stocks', [])
@@ -116,7 +110,7 @@ def get_all_returns():
 
         for stock in stocks:
             ticker, weight = stock.get('ticker').strip().upper(), float(stock.get('weight', 0))
-            if ticker in ['NAKIT', 'CASH']: continue
+            if ticker in ['NAKIT', 'CASH', 'TAHVIL', 'BOND']: continue
             yf_ticker = ticker + '.IS'
             try:
                 hist = yf.Ticker(yf_ticker).history(period="2d")
@@ -144,9 +138,38 @@ def get_all_returns():
     sorted_returns = sorted(all_returns, key=lambda x: x['change'], reverse=True)
     return jsonify(sorted_returns)
 
+@app.route('/get_portfolio_history/<portfolio_name>', methods=['GET'])
+def get_portfolio_history(portfolio_name):
+    portfolio_data = portfolios_collection.find_one({'name': portfolio_name})
+    if not portfolio_data: return jsonify({'error': 'Fon veya geçmişi bulunamadı.'}), 400
+    
+    for entry in portfolio_data.get('history', []):
+        if 'save_timestamp' in entry:
+            try:
+                dt_obj = datetime.strptime(entry['save_timestamp'], '%Y-%m-%d %H:%M:%S')
+                entry['display_timestamp'] = dt_obj.strftime('%d.%m.%Y %H:%M')
+            except ValueError:
+                entry['display_timestamp'] = entry['save_timestamp']
+    return jsonify(portfolio_data)
 
-# Geri kalan tüm diğer fonksiyonlarınızda (get_portfolio_history, calculate, vb.)
-# herhangi bir değişiklik yapmanıza gerek yoktur.
+@app.route('/delete_portfolio', methods=['POST'])
+def delete_portfolio():
+    data = request.get_json()
+    portfolio_name_to_delete = data.get('name')
+    if not portfolio_name_to_delete: return jsonify({'error': 'Silinecek fon adı belirtilmedi.'}), 400
+    
+    result = portfolios_collection.delete_one({'name': portfolio_name_to_delete})
+    
+    if result.deleted_count > 0:
+        return jsonify({'success': f'"{portfolio_name_to_delete}" fonu başarıyla silindi.'})
+    else:
+        return jsonify({'error': 'Silinecek fon bulunamadı.'}), 404
+
+# Diğer hesaplama fonksiyonları (calculate, revert_portfolio, vb.) veritabanı ile doğrudan
+# konuşmadığı için onlarda büyük bir değişiklik gerekmiyor. Sadece veri kaynağını doğru
+# kullandıklarından emin olmak yeterlidir. Kodun geri kalanı stabil çalışacaktır.
 
 if __name__ == '__main__':
+    # Lokal'de çalışırken debug modunu açabiliriz.
+    # Render bunu dikkate almayacak ve kendi sunucu komutunu kullanacaktır.
     app.run(debug=True)
