@@ -54,11 +54,11 @@
 <body>
 <div class="main-container">
     <div class="sidebar">
-        <h2>Kaydedilmiş Portföyler</h2>
+        <h2>Kaydedilmiş Fonlar</h2>
         <ul id="portfolio-list"></ul>
         <div class="sidebar-actions">
-            <button id="btn-new-portfolio">Yeni Portföy Ekle</button>
-            <button id="btn-delete-mode">Portföyü Sil</button>
+            <button id="btn-new-portfolio">Yeni Fon Ekle</button>
+            <button id="btn-delete-mode">Fonu Sil</button>
         </div>
     </div>
     <div class="content">
@@ -67,10 +67,10 @@
             <div id="live-return-display">Hesaplanıyor...</div>
             <div id="live-return-notice" style="display: none;"></div>
             <div class="options-menu">
-                <button id="btn-show-report">1. Portföy Dağılım Raporunu Gör</button>
-                <button id="btn-show-comparison">2. Portföy Değişim Geçmişi Raporu</button>
-                <button id="btn-show-historical">3. Son 30 Günlük Portföy Getirisi</button>
-                <button id="btn-edit-portfolio">4. Portföy Dağılımını Değiştir</button>
+                <button id="btn-show-report">1. Fon Portföy Dağılımını Gör</button>
+                <button id="btn-show-comparison">2. Fon Portföyü Geçmişin Gör</button>
+                <button id="btn-show-historical">3. Son 30 Günlük Fon Getirisi</button>
+                <button id="btn-edit-portfolio">4. Fon Portföy Dağılımı Değiştir</button>
             </div>
         </div>
         <div class="container" id="report-container" style="display: none;">
@@ -87,7 +87,7 @@
         <div class="container" id="form-container" style="display: block;">
             <a href="#" class="back-button" title="Seçeneklere Geri Dön" style="display: none;">&larr;</a>
             <form id="portfolio-form">
-                <div class="form-group"><label for="portfolio-name">Portföy Adı</label><input type="text" id="portfolio-name" placeholder="Yeni Portföy Adı" required></div>
+                <div class="form-group"><label for="portfolio-name">Portföy Adı</label><input type="text" id="portfolio-name" placeholder="Yeni Fon Adı" required></div>
                 <h3>Hisse Senetleri</h3><div id="stocks-container"></div>
                 <button type="button" class="btn-add" onclick="addAsset('stock')">Yeni Hisse Ekle</button>
                 <h3>Yatırım Fonları</h3><div id="funds-container"></div>
@@ -143,10 +143,10 @@
             deleteButton.textContent = 'Silme Modundan Çık';
             body.classList.add('delete-mode-active');
             ['options-container', 'form-container', 'result-area', 'report-container', 'comparison-container'].forEach(id => document.getElementById(id).style.display = 'none');
-            alert('Silme modu aktif. Silmek istediğiniz portföyü listeden seçin.');
+            alert('Silme modu aktif. Silmek istediğiniz fonu listeden seçin.');
         } else {
             deleteButton.classList.remove('active');
-            deleteButton.textContent = 'Portföyü Sil';
+            deleteButton.textContent = 'Fonu Sil';
             body.classList.remove('delete-mode-active');
         }
     }
@@ -165,7 +165,7 @@
     }
     
     async function deletePortfolio(name) {
-        if (confirm(`"${name}" portföyünü silmek istediğinizden emin misiniz? Bu işlem geri alınamaz.`)) {
+        if (confirm(`"${name}" fonunu silmek istediğinizden emin misiniz? Bu işlem geri alınamaz.`)) {
             try {
                 const response = await fetch('/delete_portfolio', {
                     method: 'POST',
@@ -179,7 +179,7 @@
                     showNewPortfolioForm();
                 } else { throw new Error(result.error); }
             } catch (error) {
-                alert('Portföy silinirken bir hata oluştu: ' + error.message);
+                alert('Fon silinirken bir hata oluştu: ' + error.message);
             }
         }
     }
@@ -221,7 +221,7 @@
         currentPortfolioName = name;
         document.querySelectorAll('#portfolio-list li').forEach(li => li.classList.remove('active'));
         if(targetElement) targetElement.classList.add('active');
-        document.getElementById('options-title').textContent = `"${name}" Portföyü İçin İşlem Seçin`;
+        document.getElementById('options-title').textContent = `"${name}" Fonu İçin İşlem Seçin`;
         
         document.getElementById('btn-show-report').onclick = () => displayPieChartReport(name);
         document.getElementById('btn-show-comparison').onclick = () => displayWeightChangeReport(name);
@@ -235,7 +235,6 @@
     }
     
     async function fetchAndDisplayLiveReturn(name) {
-        // Bu fonksiyonda değişiklik yok
         const displayDiv = document.getElementById('live-return-display');
         const noticeDiv = document.getElementById('live-return-notice');
         displayDiv.textContent = 'Anlık getiri hesaplanıyor...';
@@ -256,8 +255,7 @@
                 const timeString = now.toLocaleDateString('tr-TR', { day: '2-digit', month: '2-digit', year: 'numeric' }) + ' ' + now.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
                 displayDiv.textContent = `${timeString} - ${value >= 0 ? '+' : ''}${value.toFixed(2)}%`;
                 displayDiv.className = value >= 0 ? 'positive' : 'negative';
-                const hasFunds = result.details.some(d => d.type === 'fund' && d.date_range && d.date_range !== "Yetersiz Veri");
-                noticeDiv.textContent = hasFunds ? 'Getiriler, fonlar için bir önceki günün, hisseler için anlık kapanış verilerine göre hesaplanmıştır.' : 'Getiriler anlık hisse senedi kapanış verilerine göre hesaplanmıştır.';
+                noticeDiv.textContent = 'Getiriler 15 dakikalık gecikme ile hesaplanmaktadır.';
                 noticeDiv.style.display = 'block';
             } else { throw new Error(result.error); }
         } catch (error) {
@@ -268,8 +266,7 @@
     }
 
     async function displayPieChartReport(name) {
-        // Bu fonksiyonda değişiklik yok
-        document.getElementById('report-title').textContent = `"${name}" Portföy Dağılım Raporu`;
+        document.getElementById('report-title').textContent = `"${name}" Fon Portföy Dağılım Raporu`;
         const response = await fetch(`/get_portfolio/${name}`);
         const portfolio = await response.json();
         const assets = (portfolio.stocks || []).concat(portfolio.funds || []);
@@ -282,7 +279,6 @@
         ['options-container', 'form-container', 'result-area', 'comparison-container'].forEach(id => document.getElementById(id).style.display = 'none');
     }
 
-    // --- BU FONKSİYON TAMAMEN YENİLENDİ ---
     async function displayWeightChangeReport(name) {
         ['options-container', 'report-container', 'form-container', 'result-area'].forEach(id => document.getElementById(id).style.display = 'none');
         const container = document.getElementById('comparison-container');
@@ -290,7 +286,7 @@
         const title = document.getElementById('comparison-title');
         
         container.style.display = 'block';
-        title.textContent = `"${name}" Portföy Geçmişi Yükleniyor...`;
+        title.textContent = `"${name}" Fon Portföyü Geçmişi Yükleniyor...`;
         tableContainer.innerHTML = '<div class="loader"></div>';
 
         try {
@@ -299,7 +295,7 @@
 
             if (!response.ok) throw new Error(data.error || 'Bilinmeyen bir hata oluştu.');
             
-            title.textContent = `"${name}" Portföy Değişim Raporu`;
+            title.textContent = `"${name}" Fon Portföyü Değişim Raporu`;
             
             const allVersions = [data.current, ...data.history];
             
@@ -419,8 +415,7 @@
     }
     
     async function revertPortfolio(name) {
-        // Bu fonksiyonda değişiklik yok
-        if (confirm(`"${name}" portföyündeki son değişikliği geri almak istediğinizden emin misiniz? Güncel dağılımınız silinecek ve bir önceki dağılım geri yüklenecektir.`)) {
+        if (confirm(`"${name}" fonundaki son değişikliği geri almak istediğinizden emin misiniz? Güncel dağılımınız silinecek ve bir önceki dağılım geri yüklenecektir.`)) {
             try {
                 const response = await fetch(`/revert_portfolio/${name}`, { method: 'POST' });
                 const result = await response.json();
@@ -439,10 +434,9 @@
 
 
     async function displayHistoricalReturns(name) {
-        // Bu fonksiyonda değişiklik yok
         showResultArea(true);
         document.getElementById('historical-results-container').style.display = 'block';
-        document.getElementById('result-title').textContent = `"${name}" Portföyü - Son 30 Günlük Getiri Hesaplanıyor...`;
+        document.getElementById('result-title').textContent = `"${name}" Fonu - Son 30 Günlük Getiri Hesaplanıyor...`;
         try {
             const response = await fetch(`/calculate_historical/${name}`);
             const data = await response.json();
@@ -450,10 +444,10 @@
             
             document.getElementById('loader').style.display = 'none';
             document.getElementById('result-content').style.display = 'block';
-            document.getElementById('result-title').textContent = `"${name}" Portföyü - Son 30 Günlük Getiri Grafiği`;
+            document.getElementById('result-title').textContent = `"${name}" Fonu - Son 30 Günlük Getiri Grafiği`;
             const ctx = document.getElementById('historicalLineChart').getContext('2d');
             if (historicalChart) { historicalChart.destroy(); }
-            historicalChart = new Chart(ctx, { type: 'line', data: { labels: data.dates, datasets: [{ label: 'Günlük Portföy Getirisi (%)', data: data.returns, borderColor: 'rgb(54, 162, 235)', backgroundColor: 'rgba(54, 162, 235, 0.5)', borderWidth: 2, tension: 0.1, pointBackgroundColor: data.returns.map(v => v >= 0 ? '#27ae60' : '#c0392b') }] }, options: { responsive: true, plugins: { legend: { display: false }, tooltip: { callbacks: { label: (context) => `Getiri: ${context.raw.toFixed(2)}%` } } }, scales: { y: { title: { display: true, text: 'Günlük Getiri (%)' } }, x: { title: { display: true, text: 'Tarih' } } } } });
+            historicalChart = new Chart(ctx, { type: 'line', data: { labels: data.dates, datasets: [{ label: 'Günlük Fon Getirisi (%)', data: data.returns, borderColor: 'rgb(54, 162, 235)', backgroundColor: 'rgba(54, 162, 235, 0.5)', borderWidth: 2, tension: 0.1, pointBackgroundColor: data.returns.map(v => v >= 0 ? '#27ae60' : '#c0392b') }] }, options: { responsive: true, plugins: { legend: { display: false }, tooltip: { callbacks: { label: (context) => `Getiri: ${context.raw.toFixed(2)}%` } } }, scales: { y: { title: { display: true, text: 'Günlük Getiri (%)' } }, x: { title: { display: true, text: 'Tarih' } } } } });
         } catch (error) {
             document.getElementById('loader').style.display = 'none';
             document.getElementById('result-content').style.display = 'block';
@@ -463,7 +457,6 @@
     }
 
     async function showPortfolioEditor(name) {
-        // Bu fonksiyonda değişiklik yok
         const response = await fetch(`/get_portfolio/${name}`);
         const portfolio = await response.json();
         document.getElementById('portfolio-name').value = portfolio.name;
@@ -479,9 +472,8 @@
     }
     
     document.getElementById('save-button').addEventListener('click', async function() {
-        // Bu fonksiyonda değişiklik yok
         const portfolioName = document.getElementById('portfolio-name').value.trim();
-        if (!portfolioName) { alert('Lütfen bir portföy adı girin.'); return; }
+        if (!portfolioName) { alert('Lütfen bir fon adı girin.'); return; }
         const stocks = Array.from(document.querySelectorAll('#stocks-container .stock-row')).map(r => ({ ticker: r.children[0].value.trim().toUpperCase(), weight: r.children[1].value, adet: r.children[2].value }));
         const funds = Array.from(document.querySelectorAll('#funds-container .stock-row')).map(r => ({ ticker: r.children[0].value.trim().toUpperCase(), weight: r.children[1].value, adet: r.children[2].value }));
         if (stocks.length === 0 && funds.length === 0) { alert('Lütfen en az bir varlık girin.'); return; }
@@ -502,7 +494,6 @@
 
     // --- Yardımcı Fonksiyonlar ---
     function generateDeterministicColors(labels) {
-        // Bu fonksiyonda değişiklik yok
         const colors = [];
         for (const label of labels) {
             let hash = 0;
@@ -515,7 +506,6 @@
     }
 
     function showResultArea(isLoading) {
-        // Bu fonksiyonda değişiklik yok
         ['options-container', 'report-container', 'form-container', 'comparison-container'].forEach(id => document.getElementById(id).style.display = 'none');
         document.getElementById('result-area').style.display = 'block';
         
@@ -534,7 +524,6 @@
     }
 
     async function handleCalculate(event) {
-        // Bu fonksiyonda değişiklik yok
         event.preventDefault();
         showResultArea(true);
         const stocks = Array.from(document.querySelectorAll('#stocks-container .stock-row')).map(r => ({ ticker: r.children[0].value, weight: r.children[1].value }));
@@ -545,7 +534,7 @@
             const result = await response.json();
             if (!response.ok) throw new Error(result.error);
             showResultArea(false);
-            document.getElementById('result-title').textContent = "Anlık Portföy Getiri Analizi";
+            document.getElementById('result-title').textContent = "Anlık Fon Getiri Analizi";
             const totalResultDiv = document.getElementById('total-result');
             totalResultDiv.textContent = `${result.total_change >= 0 ? '+' : ''}${result.total_change.toFixed(2)}%`;
             totalResultDiv.className = result.total_change >= 0 ? 'positive' : 'negative';
