@@ -49,6 +49,7 @@
         .comparison-selector { display: flex; flex-wrap: wrap; gap: 20px; align-items: center; justify-content: center; margin-bottom: 20px; padding: 15px; background-color: #ecf0f1; border-radius: 6px;}
         .comparison-selector div { flex: 1; min-width: 250px; }
         .comparison-selector label { font-weight: bold; display: block; margin-bottom: 5px; }
+        #historical-results-container { height: 400px; /* Grafiğe sabit bir yükseklik verelim */ }
     </style>
 </head>
 <body>
@@ -82,7 +83,7 @@
             <a href="#" class="back-button" title="Seçeneklere Geri Dön">&larr;</a>
             <h2 id="comparison-title" style="text-align:center;"></h2>
             <div id="comparison-table-container">
-                </div>
+            </div>
         </div>
         <div class="container" id="form-container" style="display: block;">
             <a href="#" class="back-button" title="Seçeneklere Geri Dön" style="display: none;">&larr;</a>
@@ -235,7 +236,6 @@
     }
     
     async function fetchAndDisplayLiveReturn(name) {
-        // Bu fonksiyonda değişiklik yok
         const displayDiv = document.getElementById('live-return-display');
         const noticeDiv = document.getElementById('live-return-notice');
         displayDiv.textContent = 'Anlık getiri hesaplanıyor...';
@@ -268,7 +268,6 @@
     }
 
     async function displayPieChartReport(name) {
-        // Bu fonksiyonda değişiklik yok
         document.getElementById('report-title').textContent = `"${name}" Portföy Dağılım Raporu`;
         const response = await fetch(`/get_portfolio/${name}`);
         const portfolio = await response.json();
@@ -282,7 +281,6 @@
         ['options-container', 'form-container', 'result-area', 'comparison-container'].forEach(id => document.getElementById(id).style.display = 'none');
     }
 
-    // --- BU FONKSİYON TAMAMEN YENİLENDİ ---
     async function displayWeightChangeReport(name) {
         ['options-container', 'report-container', 'form-container', 'result-area'].forEach(id => document.getElementById(id).style.display = 'none');
         const container = document.getElementById('comparison-container');
@@ -419,7 +417,6 @@
     }
     
     async function revertPortfolio(name) {
-        // Bu fonksiyonda değişiklik yok
         if (confirm(`"${name}" portföyündeki son değişikliği geri almak istediğinizden emin misiniz? Güncel dağılımınız silinecek ve bir önceki dağılım geri yüklenecektir.`)) {
             try {
                 const response = await fetch(`/revert_portfolio/${name}`, { method: 'POST' });
@@ -437,12 +434,10 @@
         }
     }
 
-
     async function displayHistoricalReturns(name) {
-        // Bu fonksiyonda değişiklik yok
         showResultArea(true);
         document.getElementById('historical-results-container').style.display = 'block';
-        document.getElementById('result-title').textContent = `"${name}" Portföyü - Son 30 Günlük Getiri Hesaplanıyor...`;
+        document.getElementById('result-title').textContent = `"${name}" Portföyü - Tarihsel Getiri Hesaplanıyor...`;
         try {
             const response = await fetch(`/calculate_historical/${name}`);
             const data = await response.json();
@@ -451,19 +446,75 @@
             document.getElementById('loader').style.display = 'none';
             document.getElementById('result-content').style.display = 'block';
             document.getElementById('result-title').textContent = `"${name}" Portföyü - Son 30 Günlük Getiri Grafiği`;
+            
             const ctx = document.getElementById('historicalLineChart').getContext('2d');
             if (historicalChart) { historicalChart.destroy(); }
-            historicalChart = new Chart(ctx, { type: 'line', data: { labels: data.dates, datasets: [{ label: 'Günlük Portföy Getirisi (%)', data: data.returns, borderColor: 'rgb(54, 162, 235)', backgroundColor: 'rgba(54, 162, 235, 0.5)', borderWidth: 2, tension: 0.1, pointBackgroundColor: data.returns.map(v => v >= 0 ? '#27ae60' : '#c0392b') }] }, options: { responsive: true, plugins: { legend: { display: false }, tooltip: { callbacks: { label: (context) => `Getiri: ${context.raw.toFixed(2)}%` } } }, scales: { y: { title: { display: true, text: 'Günlük Getiri (%)' } }, x: { title: { display: true, text: 'Tarih' } } } } });
+
+            historicalChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    datasets: data.datasets.map(ds => ({
+                        ...ds,
+                        pointRadius: 3,
+                        pointHoverRadius: 5,
+                        pointBackgroundColor: (context) => {
+                            const value = context.raw.y;
+                            return value >= 0 ? 'rgb(39, 174, 96)' : 'rgb(192, 57, 43)';
+                        }
+                    }))
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    parsing: {
+                        xAxisKey: 'x',
+                        yAxisKey: 'y'
+                    },
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'top',
+                            align: 'end',
+                            labels: {
+                                usePointStyle: true,
+                                boxWidth: 8,
+                                padding: 20,
+                                font: { size: 12 }
+                            }
+                        },
+                        tooltip: {
+                            mode: 'index',
+                            intersect: false,
+                            callbacks: {
+                                label: (context) => `${context.dataset.label}: ${context.raw.y.toFixed(2)}%`
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            type: 'category',
+                            title: { display: true, text: 'Tarih' }
+                        },
+                        y: {
+                            title: { display: true, text: 'Günlük Getiri (%)' }
+                        }
+                    },
+                    interaction: {
+                        intersect: false,
+                        mode: 'index',
+                    },
+                }
+            });
         } catch (error) {
             document.getElementById('loader').style.display = 'none';
             document.getElementById('result-content').style.display = 'block';
+            document.getElementById('result-title').textContent = `Hata`;
             document.getElementById('total-result').innerHTML = `<span class="negative">Hata: ${error.message}</span>`;
             document.getElementById('historical-results-container').style.display = 'none';
         }
     }
 
     async function showPortfolioEditor(name) {
-        // Bu fonksiyonda değişiklik yok
         const response = await fetch(`/get_portfolio/${name}`);
         const portfolio = await response.json();
         document.getElementById('portfolio-name').value = portfolio.name;
@@ -479,7 +530,6 @@
     }
     
     document.getElementById('save-button').addEventListener('click', async function() {
-        // Bu fonksiyonda değişiklik yok
         const portfolioName = document.getElementById('portfolio-name').value.trim();
         if (!portfolioName) { alert('Lütfen bir portföy adı girin.'); return; }
         const stocks = Array.from(document.querySelectorAll('#stocks-container .stock-row')).map(r => ({ ticker: r.children[0].value.trim().toUpperCase(), weight: r.children[1].value, adet: r.children[2].value }));
@@ -502,7 +552,6 @@
 
     // --- Yardımcı Fonksiyonlar ---
     function generateDeterministicColors(labels) {
-        // Bu fonksiyonda değişiklik yok
         const colors = [];
         for (const label of labels) {
             let hash = 0;
@@ -515,7 +564,6 @@
     }
 
     function showResultArea(isLoading) {
-        // Bu fonksiyonda değişiklik yok
         ['options-container', 'report-container', 'form-container', 'comparison-container'].forEach(id => document.getElementById(id).style.display = 'none');
         document.getElementById('result-area').style.display = 'block';
         
@@ -534,7 +582,6 @@
     }
 
     async function handleCalculate(event) {
-        // Bu fonksiyonda değişiklik yok
         event.preventDefault();
         showResultArea(true);
         const stocks = Array.from(document.querySelectorAll('#stocks-container .stock-row')).map(r => ({ ticker: r.children[0].value, weight: r.children[1].value }));
