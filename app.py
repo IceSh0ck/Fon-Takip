@@ -5,22 +5,25 @@ import yfinance as yf
 import requests
 from datetime import date, timedelta, datetime
 import pandas as pd
-from supabase import create_client, Client
+from supabase import create_client, Client # YENİ: Supabase kütüphanesini import et
 
 app = Flask(__name__)
 
 # --- SUPABASE BAĞLANTISI ---
+# Render'a eklediğimiz Environment Variable'ları burada kullanıyoruz
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 
-# --- VERİ YÜKLEME VE KAYDETME FONKSİYONLARI ---
+# --- YENİ VERİ YÜKLEME VE KAYDETME FONKSİYONLARI (SUPABASE İÇİN) ---
 
 def load_portfolios():
     """Supabase veritabanından tüm portföyleri yükler."""
     try:
+        # 'portfolios' tablosundan 'name' ve 'data' sütunlarını seçiyoruz
         response = supabase.table('portfolios').select('name, data').execute()
+        # Gelen veriyi { 'portfolio_name': { 'current': ..., 'history': ... } } formatına çeviriyoruz
         portfolios_dict = {row['name']: row['data'] for row in response.data}
         return portfolios_dict
     except Exception as e:
@@ -30,14 +33,18 @@ def load_portfolios():
 def save_portfolios(portfolios_dict):
     """Tüm portföy sözlüğünü Supabase veritabanına kaydeder/günceller."""
     try:
+        # Önce veritabanında olup da güncel listede olmayan (yani silinmiş) portföyleri bulalım
         response = supabase.table('portfolios').select('name').execute()
         db_names = {row['name'] for row in response.data}
         local_names = set(portfolios_dict.keys())
         names_to_delete = list(db_names - local_names)
 
+        # Eğer silinecek portföy varsa, veritabanından silelim
         if names_to_delete:
             supabase.table('portfolios').delete().in_('name', names_to_delete).execute()
 
+        # Sonra eklenecek/güncellenecek portföyleri "upsert" ile tek seferde halledelim
+        # upsert: Kayıt varsa günceller, yoksa yeni kayıt oluşturur. 'name' sütununu anahtar olarak kullanır.
         if portfolios_dict:
             records_to_save = [{'name': name, 'data': data} for name, data in portfolios_dict.items()]
             supabase.table('portfolios').upsert(records_to_save).execute()
@@ -46,7 +53,9 @@ def save_portfolios(portfolios_dict):
         print(f"Supabase'e veri kaydedilirken hata: {e}")
 
 
-# --- API ENDPOINT'LERİ ---
+# --- API ENDPOINT'LERİ (BU BÖLÜMDE HİÇBİR DEĞİŞİKLİK YOK) ---
+# Endpoint'leriniz load_portfolios ve save_portfolios kullandığı için
+# bu fonksiyonların içini değiştirmemiz yeterli oldu.
 
 @app.route('/')
 def index():
@@ -136,59 +145,26 @@ def calculate():
 def calculate_historical(portfolio_name):
     portfolios = load_portfolios()
     portfolio_container = portfolios.get(portfolio_name)
-
-    if not portfolio_container:
-        return jsonify({'error': 'Portföy bulunamadı'}), 404
-
-    # 1. Adım: Tüm portföy versiyonlarını ve geçerlilik tarihlerini topla
-    all_versions = []
-    current_version = portfolio_container.get('current')
-    if current_version:
-        history_dates = [
-            datetime.strptime(v.get('save_timestamp'), '%Y-%m-%d %H:%M:%S').date()
-            for v in portfolio_container.get('history', []) if v.get('save_timestamp')
-        ]
-        start_of_current = max(history_dates) if history_dates else (date.today() - timedelta(days=45))
-        all_versions.append({'portfolio': current_version, 'start_date': start_of_current, 'is_current': True})
-
-    for past_version in portfolio_container.get('history', []):
-        try:
-            save_date = datetime.strptime(past_version.get('save_timestamp'), '%Y-%m-%d %H:%M:%S').date()
-            all_versions.append({'portfolio': past_version, 'start_date': save_date, 'is_current': False})
-        except (ValueError, TypeError):
-            continue
-
-    all_versions.sort(key=lambda x: x['start_date'], reverse=True)
-
-    if not all_versions:
-        return jsonify({'error': 'Hesaplanacak portföy versiyonu bulunamadı.'}), 400
-
-    # 2. Adım: Genel tarih aralığını ve tüm varlıkları belirle
-    end_date = date.today()
-    start_date = end_date - timedelta(days=45)
-
-    all_stock_tickers = set()
-    all_fund_tickers = set()
-    for version in all_versions:
-        for stock in version['portfolio'].get('stocks', []):
-            all_stock_tickers.add(stock['ticker'].strip().upper() + '.IS')
-        for fund in version['portfolio'].get('funds', []):
-            all_fund_tickers.add(fund['ticker'].strip().upper())
-    
-    # 3. Adım: Tüm varlıkların fiyat verilerini tek seferde çek
+    if not portfolio_container: return jsonify({'error': 'Portföy bulunamadı'}), 404
+    portfolio = portfolio_container.get('current')
+    if not portfolio: return jsonify({'error': 'Portföyün güncel versiyonu bulunamadı.'}), 404
+    end_date, start_date = date.today(), date.today() - timedelta(days=45)
+    all_assets = portfolio.get('stocks', []) + portfolio.get('funds', [])
+    if not all_assets: return jsonify({'error': 'Portföyde hesaplanacak varlık yok.'}), 400
     asset_prices_df = pd.DataFrame()
-    if all_stock_tickers:
+    stocks_in_portfolio = portfolio.get('stocks', [])
+    if stocks_in_portfolio:
+        stock_tickers_is = [s['ticker'].strip().upper() + '.IS' for s in stocks_in_portfolio]
         try:
-            stock_data = yf.download(list(all_stock_tickers), start=start_date, end=end_date, progress=False)['Close']
+            stock_data = yf.download(stock_tickers_is, start=start_date, end=end_date, progress=False)
             if not stock_data.empty:
-                if isinstance(stock_data, pd.Series):
-                    stock_data = stock_data.to_frame(name=list(all_stock_tickers)[0])
-                asset_prices_df = pd.concat([asset_prices_df, stock_data], axis=1)
+                close_prices = stock_data['Close'] if len(stock_tickers_is) > 1 else stock_data[['Close']]
+                asset_prices_df = pd.concat([asset_prices_df, close_prices], axis=1)
         except Exception as e:
             print(f"Hisse senedi verisi alınırken hata: {e}")
-
     sdt_str, fdt_str = start_date.strftime('%d-%m-%Y'), end_date.strftime('%d-%m-%Y')
-    for fund_code in all_fund_tickers:
+    for fund in portfolio.get('funds', []):
+        fund_code = fund['ticker'].strip().upper()
         try:
             res = requests.get(f"https://www.tefas.gov.tr/api/DB/BindHistoryPrice?sdt={sdt_str}&fdt={fdt_str}&kod={fund_code}", timeout=10)
             fund_data = res.json()
@@ -197,86 +173,18 @@ def calculate_historical(portfolio_name):
                 df['Tarih'] = pd.to_datetime(df['Tarih'])
                 df = df.set_index('Tarih')[['BirimPayDegeri']].rename(columns={'BirimPayDegeri': fund_code})
                 asset_prices_df = pd.concat([asset_prices_df, df], axis=1)
-        except Exception as e:
-            print(f"Fon verisi alınırken hata ({fund_code}): {e}")
-            
-    if asset_prices_df.empty:
-        return jsonify({'error': 'Tarihsel veri bulunamadı.'}), 400
-
+        except Exception as e: print(f"Fon verisi alınırken hata ({fund_code}): {e}")
+    if asset_prices_df.empty: return jsonify({'error': 'Tarihsel veri bulunamadı.'}), 400
     asset_prices_df.columns = asset_prices_df.columns.str.replace('.IS', '', regex=False)
     asset_prices_df = asset_prices_df.ffill().dropna(how='all')
     daily_returns = asset_prices_df.pct_change()
-
-    # 4. Adım: Her gün için doğru portföy ağırlıklarını kullanarak getiri hesapla
-    portfolio_daily_returns = pd.Series(index=daily_returns.index, dtype=float)
-
-    for i, version_data in enumerate(all_versions):
-        period_start_date = version_data['start_date']
-        period_end_date = all_versions[i-1]['start_date'] - timedelta(days=1) if i > 0 else end_date
-
-        period_start_date = max(period_start_date, start_date)
-        if period_start_date > period_end_date: continue
-
-        assets = version_data['portfolio'].get('stocks', []) + version_data['portfolio'].get('funds', [])
-        weights_dict = {asset['ticker'].strip().upper(): float(asset['weight']) / 100 for asset in assets}
-        aligned_weights = pd.Series(weights_dict).reindex(daily_returns.columns).fillna(0)
-
-        period_mask = (daily_returns.index.date >= period_start_date) & (daily_returns.index.date <= period_end_date)
-        period_returns = (daily_returns[period_mask] * aligned_weights).sum(axis=1) * 100
-        portfolio_daily_returns.update(period_returns)
-        
-    # 5. Adım: Frontend için veri setlerini oluştur
+    weights_dict = {asset['ticker'].strip().upper(): float(asset['weight']) / 100 for asset in all_assets}
+    aligned_weights = pd.Series(weights_dict).reindex(daily_returns.columns).fillna(0)
+    portfolio_daily_returns = (daily_returns * aligned_weights).sum(axis=1) * 100
     valid_returns = portfolio_daily_returns.dropna()
-    datasets = []
-    
-    for i in range(len(all_versions) - 1, -1, -1):
-        version_data = all_versions[i]
-        period_start_date = version_data['start_date']
-        period_end_date = all_versions[i-1]['start_date'] - timedelta(days=1) if i > 0 else end_date
-
-        period_start_date = max(period_start_date, start_date)
-        if period_start_date > period_end_date: continue
-
-        mask = (valid_returns.index.date >= period_start_date) & (valid_returns.index.date <= period_end_date)
-        segment_returns = valid_returns[mask]
-        
-        if not segment_returns.empty:
-            prev_day_index = segment_returns.index[0] - pd.Timedelta(days=1)
-            if prev_day_index in valid_returns.index:
-                segment_returns = pd.concat([valid_returns.loc[[prev_day_index]], segment_returns])
-
-            if version_data['is_current']:
-                color = 'rgb(255, 205, 86)' # Sarı
-                label = f"Güncel Versiyon ({period_start_date.strftime('%d.%m.%Y')} sonrası)"
-            else:
-                color = 'rgb(54, 162, 235)' # Mavi
-                label = f"Önceki Versiyon ({period_end_date.strftime('%d.%m.%Y')} öncesi)"
-
-            datasets.append({
-                'label': label,
-                'data': [{'x': ts.strftime('%d.%m.%Y'), 'y': val} for ts, val in segment_returns.items()],
-                'borderColor': color,
-                'backgroundColor': color.replace(')', ', 0.5)').replace('rgb', 'rgba'),
-                'tension': 0.1,
-                'borderWidth': 2.5
-            })
-
-    # Son 30 günü göster
-    thirty_days_ago = date.today() - timedelta(days=30)
-    final_datasets = []
-    for ds in datasets:
-        filtered_data = [d for d in ds['data'] if datetime.strptime(d['x'], '%d.%m.%Y').date() >= thirty_days_ago]
-        if filtered_data:
-            first_date_in_set = datetime.strptime(filtered_data[0]['x'], '%d.%m.%Y').date()
-            original_data_point = next((od for od in ds['data'] if od['x'] == filtered_data[0]['x']), None)
-            original_index = ds['data'].index(original_data_point) if original_data_point else -1
-            if original_index > 0:
-                filtered_data.insert(0, ds['data'][original_index - 1])
-            ds['data'] = filtered_data
-            final_datasets.append(ds)
-
-    return jsonify({'datasets': final_datasets})
-
+    dates = valid_returns.index.strftime('%d.%m.%Y').tolist()[-30:]
+    returns = valid_returns.tolist()[-30:]
+    return jsonify({'dates': dates, 'returns': returns})
 
 @app.route('/get_portfolio_history/<portfolio_name>', methods=['GET'])
 def get_portfolio_history(portfolio_name):
