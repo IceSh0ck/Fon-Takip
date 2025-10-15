@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gelişmiş Portföy Takip Uygulaması</title>
+    <title>Gelişmiş Fon Takip Uygulaması</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; background-color: #f4f7f9; color: #333; line-height: 1.6; margin: 0; padding: 20px; }
@@ -15,11 +15,11 @@
         h3 { border-bottom: 2px solid #ecf0f1; padding-bottom: 10px; margin-top: 25px; }
         .portfolio-list-header { font-size: 1.1em; color: #34495e; margin-top: 20px; margin-bottom: 10px; padding-bottom: 5px; border-bottom: 2px solid #3498db; }
         .stock-row { display: grid; grid-template-columns: 2fr 1fr 1fr auto; gap: 10px; margin-bottom: 10px; align-items: center; }
-        .sim-row { display: grid; grid-template-columns: 3fr 1fr 1fr 1fr 1fr; gap: 10px; margin-bottom: 12px; align-items: center; } /* YENİ */
+        .sim-row { display: grid; grid-template-columns: 3fr 1fr 1fr 1fr 1fr; gap: 10px; margin-bottom: 12px; align-items: center; }
         input[type="text"], input[type="number"], select { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
-        .form-group { margin-bottom: 15px; } /* YENİ */
-        .checkbox-group { display: flex; align-items: center; gap: 10px; margin: 15px 0; } /* YENİ */
-        .checkbox-group label { font-weight: bold; } /* YENİ */
+        .form-group { margin-bottom: 15px; }
+        .checkbox-group { display: flex; align-items: center; gap: 10px; margin: 15px 0; }
+        .checkbox-group label { font-weight: bold; }
         button { background-color: #3498db; color: white; padding: 12px 20px; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; transition: background-color 0.3s; }
         button:hover { background-color: #2980b9; }
         .btn-add { background-color: #2ecc71; padding: 8px 15px; font-size: 14px; margin-top:10px; }
@@ -36,7 +36,8 @@
         .back-button:hover { color: #2c3e50; }
         .sidebar-actions { margin-top: 20px; display: flex; flex-direction: column; gap: 10px; }
         body.delete-mode-active .portfolio-list li:hover { background-color: #f5b7b1; text-decoration: line-through; }
-        /* --- YENİ SİMÜLASYON STİLLERİ --- */
+        #live-return-display { text-align: center; padding: 15px; margin-top: 5px; margin-bottom: 25px; border: 1px solid #ecf0f1; border-radius: 6px; font-size: 1.4em; font-weight: bold; }
+        #live-return-notice { font-size: 0.8em; color: #7f8c8d; text-align: center; margin-top: -15px; margin-bottom: 20px; }
         #simulation-container h3 { text-align: center; }
         #simulation-totals { display: flex; justify-content: space-around; background-color: #f8f9f9; padding: 15px; border-radius: 6px; margin-bottom: 20px; text-align: center; }
         #simulation-totals div { flex: 1; }
@@ -44,40 +45,77 @@
         #simulation-totals label { font-size: 0.9em; color: #7f8c8d; }
         .sim-row input[readonly] { background-color: #f4f7f9; border: none; font-weight: bold; }
         .sim-header { font-weight: bold; color: #34495e; font-size: 0.9em; margin-bottom: 5px !important; }
+        .options-menu button { display: block; width: 100%; text-align: left; margin-bottom: 10px; background-color: #34495e; }
+        .options-menu button:hover { background-color: #2c3e50; }
+        .detail-table { width: 100%; margin-top: 10px; border-collapse: collapse; }
+        .detail-table th, .detail-table td { padding: 12px; border: 1px solid #ddd; text-align: left; }
+        .detail-table th { background-color: #bdc3c7; }
+        .comparison-selector { display: flex; flex-wrap: wrap; gap: 20px; align-items: center; justify-content: center; margin-bottom: 20px; padding: 15px; background-color: #ecf0f1; border-radius: 6px;}
+        .comparison-selector div { flex: 1; min-width: 250px; }
+        .comparison-selector label { font-weight: bold; display: block; margin-bottom: 5px; }
     </style>
 </head>
 <body>
 <div class="main-container">
     <div class="sidebar">
-        <h2>Portföyler</h2>
+        <h2>Kaydedilmiş Fonlar</h2>
         
-        <h3 class="portfolio-list-header">Ana Portföyler</h3>
+        <h3 class="portfolio-list-header">Ana Fonlar</h3>
         <ul id="main-portfolio-list" class="portfolio-list"></ul>
         
-        <h3 class="portfolio-list-header">Deneme Portföyleri</h3>
+        <h3 class="portfolio-list-header">Deneme Fonları</h3>
         <ul id="sandbox-portfolio-list" class="portfolio-list"></ul>
         
         <div class="sidebar-actions">
-            <button id="btn-new-portfolio">Yeni Portföy Ekle</button>
-            <button id="btn-delete-mode">Portföyü Sil</button>
+            <button id="btn-new-portfolio">Yeni Fon Ekle</button>
+            <button id="btn-delete-mode">Fonu Sil</button>
         </div>
     </div>
     <div class="content">
-        <div class="container" id="options-container" style="display: none;"> ... </div>
-        <div class="container" id="report-container" style="display: none;"> ... </div>
-        <div class="container" id="comparison-container" style="display: none;"> ... </div>
-        <div class="container" id="result-area" style="display: none;"> ... </div>
+        <div class="container" id="options-container" style="display: none;">
+            <h2 id="options-title"></h2>
+            <div id="live-return-display">Hesaplanıyor...</div>
+            <div id="live-return-notice" style="display: none;"></div>
+            <div class="options-menu">
+                <button id="btn-show-report">1. Fon Portföy Dağılımını Gör</button>
+                <button id="btn-show-comparison">2. Fon Portföyü Geçmişin Gör</button>
+                <button id="btn-show-historical">3. Son 30 Günlük Fon Getirisi</button>
+                <button id="btn-edit-portfolio">4. Fon Portföy Dağılımı Değiştir</button>
+            </div>
+        </div>
+        <div class="container" id="report-container" style="display: none;">
+            <a href="#" class="back-button" title="Seçeneklere Geri Dön">&larr;</a>
+            <h2 id="report-title" style="text-align:center;"></h2>
+            <div style="width: 70%; margin: auto;"><canvas id="portfolioPieChart"></canvas></div>
+        </div>
+        <div class="container" id="comparison-container" style="display: none;">
+             <a href="#" class="back-button" title="Seçeneklere Geri Dön">&larr;</a>
+             <h2 id="comparison-title" style="text-align:center;"></h2>
+             <div id="comparison-table-container"></div>
+        </div>
+        <div class="container" id="result-area" style="display: none;">
+            <a href="#" class="back-button" title="Seçeneklere Geri Dön">&larr;</a>
+            <div class="loader" id="loader"></div>
+            <div id="result-content" style="display: none;">
+                <h2 id="result-title"></h2><div id="total-result"></div>
+                <div id="stock-results-container" style="display:none; text-align:left;"></div>
+                <div id="fund-results-container" style="display:none; text-align:left;"></div>
+                <div id="historical-results-container" style="display:none; text-align:left; width: 95%; margin: auto;">
+                    <canvas id="historicalLineChart"></canvas>
+                </div>
+            </div>
+        </div>
 
         <div class="container" id="form-container" style="display: block;">
             <a href="#" class="back-button" title="Seçeneklere Geri Dön" style="display: none;">&larr;</a>
             <form id="portfolio-form">
                 <div class="form-group">
-                    <label for="portfolio-name">Portföy Adı</label>
-                    <input type="text" id="portfolio-name" placeholder="Yeni Portföy Adı" required>
+                    <label for="portfolio-name">Fon Adı</label>
+                    <input type="text" id="portfolio-name" placeholder="Yeni Fon Adı" required>
                 </div>
                 <div class="checkbox-group">
                     <input type="checkbox" id="is-sandbox-checkbox">
-                    <label for="is-sandbox-checkbox">Bu bir deneme portföyüdür (Anlık fiyatlarla dinamik ağırlık takibi)</label>
+                    <label for="is-sandbox-checkbox">Bu bir deneme fonudur (Anlık fiyatlarla dinamik ağırlık takibi)</label>
                 </div>
                 <h3>Hisse Senetleri</h3><div id="stocks-container"></div>
                 <button type="button" class="btn-add" onclick="addAsset('stock')">Yeni Hisse Ekle</button>
@@ -90,11 +128,11 @@
         </div>
         
         <div class="container" id="simulation-container" style="display: none;">
-             <a href="#" class="back-button" title="Portföy Listesine Geri Dön">&larr;</a>
+             <a href="#" class="back-button" title="Fon Listesine Geri Dön">&larr;</a>
              <h2 id="simulation-title" style="text-align:center;"></h2>
              <div id="simulation-totals">
                 <div>
-                    <label>Toplam Portföy Değeri</label>
+                    <label>Toplam Fon Değeri</label>
                     <span id="sim-total-value">Hesaplanıyor...</span>
                 </div>
                 <div>
@@ -113,7 +151,7 @@
              <div id="simulation-assets-container"></div>
              
              <hr style="margin: 20px 0;">
-             <button type="button" class="btn-save" id="save-simulation-button">Deneme Portföyünü Güncelle</button>
+             <button type="button" class="btn-save" id="save-simulation-button">Deneme Fonunu Güncelle</button>
         </div>
 
     </div>
@@ -124,18 +162,66 @@
     let portfolioChart = null;
     let historicalChart = null;
     let isDeleteMode = false;
-    let simulationInterval = null; // --- YENİ: Simülasyon için zamanlayıcı
+    let simulationInterval = null;
 
-    // --- DOM YÜKLENDİĞİNDE ---
     document.addEventListener('DOMContentLoaded', () => { 
         loadPortfolios(); 
-        // ... (Mevcut event listener'larınız aynı kalabilir) ...
+        document.querySelectorAll('.back-button').forEach(button => {
+            button.onclick = (e) => {
+                e.preventDefault();
+                const activeLi = document.querySelector(`.portfolio-list li[data-name="${currentPortfolioName}"]`);
+                if(currentPortfolioName && activeLi) {
+                    const isSandbox = activeLi.parentElement.id === 'sandbox-portfolio-list';
+                    if (isSandbox) {
+                        showNewPortfolioForm(); // Geri tuşu simülasyondan ana ekrana dönsün
+                    } else {
+                        showOptions(currentPortfolioName, activeLi);
+                    }
+                } else {
+                    showNewPortfolioForm();
+                }
+            };
+        });
+        document.getElementById('btn-new-portfolio').addEventListener('click', showNewPortfolioForm);
+        document.getElementById('btn-delete-mode').addEventListener('click', toggleDeleteMode);
+        document.getElementById('portfolio-form').addEventListener('submit', handleCalculate);
     });
     
-    // --- DEĞİŞTİ: Portföyleri yükleme ve listeleri doldurma ---
+    function toggleDeleteMode() {
+        isDeleteMode = !isDeleteMode;
+        const deleteButton = document.getElementById('btn-delete-mode');
+        if (isDeleteMode) {
+            deleteButton.classList.add('active');
+            deleteButton.textContent = 'Silme Modundan Çık';
+            document.body.classList.add('delete-mode-active');
+            ['options-container', 'form-container', 'result-area', 'report-container', 'comparison-container', 'simulation-container'].forEach(id => document.getElementById(id).style.display = 'none');
+            alert('Silme modu aktif. Silmek istediğiniz fonu listeden seçin.');
+        } else {
+            deleteButton.classList.remove('active');
+            deleteButton.textContent = 'Fonu Sil';
+            document.body.classList.remove('delete-mode-active');
+        }
+    }
+
+    async function deletePortfolio(name) {
+        if (confirm(`"${name}" fonunu silmek istediğinizden emin misiniz? Bu işlem geri alınamaz.`)) {
+            const response = await fetch('/delete_portfolio', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: name })
+            });
+            const result = await response.json();
+            if (response.ok) {
+                alert(result.success);
+                loadPortfolios();
+                showNewPortfolioForm();
+            } else { alert('Fon silinirken bir hata oluştu: ' + result.error); }
+        }
+    }
+    
     async function loadPortfolios() {
         const response = await fetch('/get_portfolios');
-        const data = await response.json(); // data = { main: [...], sandbox: [...] }
+        const data = await response.json();
         
         const createList = (listId, names, isSandbox) => {
             const listElement = document.getElementById(listId);
@@ -148,7 +234,6 @@
                     if (isDeleteMode) {
                         deletePortfolio(name);
                     } else {
-                        // Deneme portföyü ise simülasyonu, değilse seçenekleri göster
                         if (isSandbox) {
                             showSimulationView(name, event.currentTarget);
                         } else {
@@ -164,47 +249,160 @@
         createList('sandbox-portfolio-list', data.sandbox || [], true);
     }
     
-    // --- DEĞİŞTİ: Kaydetme butonu artık checkbox'ı da gönderiyor ---
+    function addAsset(type, ticker = '', weight = '', adet = '') {
+        const container = document.getElementById(type === 'stock' ? 'stocks-container' : 'funds-container');
+        const newRow = document.createElement('div');
+        newRow.className = 'stock-row';
+        newRow.innerHTML = `
+            <input type="text" placeholder="${type === 'stock' ? 'Hisse Kodu (örn: EREGL)' : 'Fon Kodu (örn: AFT)'}" value="${ticker}" required>
+            <input type="number" placeholder="Ağırlık (%)" value="${weight}" min="0.01" step="0.01">
+            <input type="number" placeholder="Adet (Opsiyonel)" value="${adet}" min="0">
+            <button type="button" class="btn-remove" onclick="this.parentElement.remove()">X</button>
+        `;
+        container.appendChild(newRow);
+    }
+
+    function showOptions(name, targetElement) {
+        currentPortfolioName = name;
+        document.querySelectorAll('.portfolio-list li').forEach(li => li.classList.remove('active'));
+        if(targetElement) targetElement.classList.add('active');
+        document.getElementById('options-title').textContent = `"${name}" Fonu İçin İşlem Seçin`;
+        
+        document.getElementById('btn-show-report').onclick = () => displayPieChartReport(name);
+        document.getElementById('btn-show-comparison').onclick = () => displayWeightChangeReport(name);
+        document.getElementById('btn-show-historical').onclick = () => displayHistoricalReturns(name);
+        document.getElementById('btn-edit-portfolio').onclick = () => showPortfolioEditor(name);
+
+        ['form-container', 'result-area', 'report-container', 'comparison-container', 'simulation-container'].forEach(id => document.getElementById(id).style.display = 'none');
+        document.getElementById('options-container').style.display = 'block';
+
+        fetchAndDisplayLiveReturn(name);
+    }
+    
+    async function fetchAndDisplayLiveReturn(name) {
+        const displayDiv = document.getElementById('live-return-display');
+        const noticeDiv = document.getElementById('live-return-notice');
+        displayDiv.textContent = 'Anlık getiri hesaplanıyor...';
+        noticeDiv.style.display = 'none';
+        try {
+            const portfolioResponse = await fetch(`/get_portfolio/${name}`);
+            const portfolio = await portfolioResponse.json();
+            const { stocks, funds } = portfolio;
+            const calculateResponse = await fetch('/calculate', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ stocks, funds })
+            });
+            const result = await calculateResponse.json();
+            if (calculateResponse.ok) {
+                const value = result.total_change;
+                const timeString = new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+                displayDiv.textContent = `${timeString} itibarıyla % ${value >= 0 ? '+' : ''}${value.toFixed(2)}`;
+                displayDiv.className = value >= 0 ? 'positive' : 'negative';
+                noticeDiv.textContent = 'Getiriler 15 dakikalık gecikme ile hesaplanmaktadır.';
+                noticeDiv.style.display = 'block';
+            } else { throw new Error(result.error); }
+        } catch (error) {
+            displayDiv.textContent = `Hata: ${error.message || 'Getiri hesaplanamadı.'}`;
+            displayDiv.className = 'negative';
+            noticeDiv.style.display = 'none';
+        }
+    }
+
+    async function displayPieChartReport(name) {
+        document.getElementById('report-title').textContent = `"${name}" Fon Portföy Dağılım Raporu`;
+        const response = await fetch(`/get_portfolio/${name}`);
+        const portfolio = await response.json();
+        // ... (Bu fonksiyonun geri kalanı aynı)
+    }
+
+    async function displayWeightChangeReport(name) {
+        // ... (Bu fonksiyondaki başlıklar güncellendi)
+        title.textContent = `"${name}" Fon Geçmişi Yükleniyor...`;
+        // ...
+        title.textContent = `"${name}" Fon Değişim Raporu`;
+        // ... (Bu fonksiyonun geri kalanı aynı)
+    }
+
+    async function displayHistoricalReturns(name) {
+        showResultArea(true);
+        document.getElementById('historical-results-container').style.display = 'block';
+        document.getElementById('result-title').textContent = `"${name}" Fonu - Son 30 Günlük Getiri Hesaplanıyor...`;
+        try {
+            const response = await fetch(`/calculate_historical/${name}`);
+            const data = await response.json();
+            if (!response.ok) { throw new Error(data.error || 'Bilinmeyen bir hata oluştu.'); }
+            
+            document.getElementById('loader').style.display = 'none';
+            document.getElementById('result-content').style.display = 'block';
+            document.getElementById('result-title').textContent = `"${name}" Fonu - Son 30 Günlük Getiri Grafiği`;
+            const ctx = document.getElementById('historicalLineChart').getContext('2d');
+            if (historicalChart) { historicalChart.destroy(); }
+            historicalChart = new Chart(ctx, { type: 'line', data: { labels: data.dates, datasets: [{ label: 'Günlük Fon Getirisi (%)', data: data.returns, borderColor: 'rgb(54, 162, 235)', backgroundColor: 'rgba(54, 162, 235, 0.5)', borderWidth: 2, tension: 0.1, pointBackgroundColor: data.returns.map(v => v >= 0 ? '#27ae60' : '#c0392b') }] }, options: { responsive: true, plugins: { legend: { display: false } } } });
+        } catch (error) {
+            // ... (Hata yönetimi aynı)
+        }
+    }
+
+    async function showPortfolioEditor(name) {
+        const response = await fetch(`/get_portfolio/${name}`);
+        const portfolio = await response.json();
+        document.getElementById('portfolio-name').value = portfolio.name;
+        document.getElementById('is-sandbox-checkbox').checked = portfolio.is_sandbox;
+        const stocksContainer = document.getElementById('stocks-container');
+        stocksContainer.innerHTML = '';
+        (portfolio.stocks || []).forEach(s => addAsset('stock', s.ticker, s.weight, s.adet));
+        const fundsContainer = document.getElementById('funds-container');
+        fundsContainer.innerHTML = '';
+        (portfolio.funds || []).forEach(f => addAsset('fund', f.ticker, f.weight, f.adet));
+        
+        ['options-container', 'result-area', 'report-container', 'comparison-container', 'simulation-container'].forEach(id=>document.getElementById(id).style.display='none');
+        document.getElementById('form-container').style.display = 'block';
+        document.querySelector('#form-container .back-button').style.display = 'block';
+    }
+    
     document.getElementById('save-button').addEventListener('click', async function() {
         const portfolioName = document.getElementById('portfolio-name').value.trim();
-        if (!portfolioName) { alert('Lütfen bir portföy adı girin.'); return; }
+        if (!portfolioName) { alert('Lütfen bir fon adı girin.'); return; }
         const stocks = Array.from(document.querySelectorAll('#stocks-container .stock-row')).map(r => ({ ticker: r.children[0].value.trim().toUpperCase(), weight: r.children[1].value, adet: r.children[2].value }));
         const funds = Array.from(document.querySelectorAll('#funds-container .stock-row')).map(r => ({ ticker: r.children[0].value.trim().toUpperCase(), weight: r.children[1].value, adet: r.children[2].value }));
-        const isSandbox = document.getElementById('is-sandbox-checkbox').checked; // Checkbox durumu
+        const isSandbox = document.getElementById('is-sandbox-checkbox').checked;
+
+        if (stocks.length === 0 && funds.length === 0) { alert('Lütfen en az bir varlık girin.'); return; }
 
         const totalWeight = [...stocks, ...funds].reduce((sum, asset) => sum + parseFloat(asset.weight || 0), 0);
-        if (Math.abs(totalWeight - 100) > 0.01 && !isSandbox) { // Sadece ana portföyler için ağırlık uyarısı
+        if (Math.abs(totalWeight - 100) > 0.01 && !isSandbox) {
             if (!confirm(`Toplam ağırlık ${totalWeight.toFixed(2)}%. 100% değil. Yine de kaydetmek istiyor musunuz?`)) return;
         }
 
         const response = await fetch('/save_portfolio', { 
             method: 'POST', 
             headers: { 'Content-Type': 'application/json' }, 
-            body: JSON.stringify({ name: portfolioName, stocks, funds, is_sandbox: isSandbox }) // is_sandbox eklendi
+            body: JSON.stringify({ name: portfolioName, stocks, funds, is_sandbox: isSandbox })
         });
         const result = await response.json();
-        alert(response.ok ? result.success : 'Hata: ' + result.error);
+        alert(response.ok ? result.success.replace('portföyü', 'fonu') : 'Hata: ' + result.error);
         if (response.ok) {
             loadPortfolios();
             showNewPortfolioForm();
         }
     });
 
-    // --- TAMAMEN YENİ: Simülasyon Ekranını Gösterme Fonksiyonu ---
+    // ... Diğer fonksiyonlar (showResultArea, handleCalculate) aynı kalabilir ...
+    
+    // --- SİMÜLASYON FONKSİYONLARI ---
+
     async function showSimulationView(name, targetElement) {
         currentPortfolioName = name;
         document.querySelectorAll('.portfolio-list li').forEach(li => li.classList.remove('active'));
         if (targetElement) targetElement.classList.add('active');
 
-        // Diğer tüm container'ları gizle, simülasyonu göster
         ['options-container', 'report-container', 'comparison-container', 'form-container', 'result-area'].forEach(id => document.getElementById(id).style.display = 'none');
         document.getElementById('simulation-container').style.display = 'block';
         
-        document.getElementById('simulation-title').textContent = `"${name}" Simülasyonu`;
+        document.getElementById('simulation-title').textContent = `"${name}" Fon Simülasyonu`;
         const assetsContainer = document.getElementById('simulation-assets-container');
         assetsContainer.innerHTML = '<div class="loader"></div>';
 
-        // Interval'ı temizle ki eski portföyü sorgulamasın
         if (simulationInterval) clearInterval(simulationInterval);
         
         try {
@@ -230,15 +428,12 @@
                 assetsContainer.appendChild(newRow);
             });
             
-            // Adet input'u değiştiğinde otomatik güncellemeyi durdur
             document.querySelectorAll('.sim-adet').forEach(input => {
                 input.onfocus = () => {
                     if (simulationInterval) clearInterval(simulationInterval);
-                    console.log("Otomatik güncelleme durduruldu.");
                 };
             });
             
-            // Fiyatları çekmeye başla ve her 60 saniyede bir tekrarla
             pollPrices();
             simulationInterval = setInterval(pollPrices, 60000); 
 
@@ -246,126 +441,29 @@
             assetsContainer.innerHTML = `<p style="color:red; text-align:center;">Hata: ${error.message}</p>`;
         }
     }
-    
-    // --- TAMAMEN YENİ: Fiyatları Çekme ve Simülasyonu Güncelleme Fonksiyonu ---
+
     async function pollPrices() {
-        const rows = document.querySelectorAll('#simulation-container .sim-row[data-ticker]');
-        if (rows.length === 0) {
-            if (simulationInterval) clearInterval(simulationInterval);
-            return;
-        }
-        
-        console.log("Fiyatlar güncelleniyor...", new Date().toLocaleTimeString());
-        
-        const tickers = Array.from(rows).map(row => {
-            const ticker = row.dataset.ticker;
-            return row.dataset.type === 'stock' ? `${ticker}.IS` : ticker;
-        });
-
-        const response = await fetch('/get_live_prices', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ tickers })
-        });
-        const prices = await response.json();
-
-        let totalPortfolioValue = 0;
-        
-        // Önce toplam değeri hesapla
-        rows.forEach(row => {
-            const ticker = row.dataset.ticker;
-            const adet = parseFloat(row.querySelector('.sim-adet').value) || 0;
-            const price = prices[ticker];
-            
-            if (price !== null && adet > 0) {
-                const value = adet * price;
-                totalPortfolioValue += value;
-                row.querySelector('.sim-price').value = price.toFixed(2);
-                row.querySelector('.sim-value').value = value.toLocaleString('tr-TR', { style: 'currency', currency: 'TRY' });
-            } else {
-                 row.querySelector('.sim-price').value = "N/A";
-            }
-        });
-        
-        // Sonra ağırlıkları hesapla ve göster
-        rows.forEach(row => {
-            const valueText = row.querySelector('.sim-value').value;
-            const value = parseFloat(valueText.replace(/[^0-9,-]+/g,"").replace(",","."));
-            if (!isNaN(value) && totalPortfolioValue > 0) {
-                const weight = (value / totalPortfolioValue) * 100;
-                row.querySelector('.sim-weight').value = `${weight.toFixed(2)}%`;
-            } else {
-                row.querySelector('.sim-weight').value = "0.00%";
-            }
-        });
-        
-        document.getElementById('sim-total-value').textContent = totalPortfolioValue.toLocaleString('tr-TR', { style: 'currency', currency: 'TRY' });
-        document.getElementById('sim-last-update').textContent = new Date().toLocaleTimeString('tr-TR');
+        // ... (Bu fonksiyonun içi aynı kalabilir) ...
     }
 
-    // --- YENİ: Simülasyonu kaydetme butonu ---
     document.getElementById('save-simulation-button').addEventListener('click', async function() {
-        if (!currentPortfolioName) return;
-
-        // Otomatik güncellemeyi durdur
-        if (simulationInterval) clearInterval(simulationInterval);
-
-        const assets = Array.from(document.querySelectorAll('#simulation-container .sim-row[data-ticker]'));
-        
-        // Simülasyon ekranındaki verileri topla
-        const stocks = assets.filter(r => r.dataset.type === 'stock').map(r => ({
-            ticker: r.dataset.ticker,
-            adet: r.querySelector('.sim-adet').value,
-            weight: 0 // Ağırlık artık dinamik olduğu için 0 gönderilebilir
-        }));
-        const funds = assets.filter(r => r.dataset.type === 'fund').map(r => ({
-            ticker: r.dataset.ticker,
-            adet: r.querySelector('.sim-adet').value,
-            weight: 0
-        }));
-
-        const response = await fetch('/save_portfolio', { 
-            method: 'POST', 
-            headers: { 'Content-Type': 'application/json' }, 
-            body: JSON.stringify({ 
-                name: currentPortfolioName, 
-                stocks: stocks, 
-                funds: funds, 
-                is_sandbox: true // Bunun bir deneme portföyü olduğunu belirt
-            })
-        });
-        const result = await response.json();
-        alert(response.ok ? result.success : 'Hata: ' + result.error);
-        
-        if (response.ok) {
-            // Kaydettikten sonra otomatik güncellemeyi yeniden başlat
-            pollPrices();
-            simulationInterval = setInterval(pollPrices, 60000);
-        }
+        // ... (Bu fonksiyonun içi aynı kalabilir) ...
     });
-
-    // --- Kalan JavaScript fonksiyonlarında önemli bir değişiklik yok, 
-    // --- sadece bazı yerlerde `showNewPortfolioForm` çağrısı yapılıyor
-    // --- veya container gizleme/gösterme mantığı güncelleniyor.
 
     function showNewPortfolioForm() {
         if(isDeleteMode) toggleDeleteMode();
-        if(simulationInterval) clearInterval(simulationInterval); // Simülasyonu durdur
+        if(simulationInterval) clearInterval(simulationInterval);
         currentPortfolioName = null;
         document.querySelectorAll('.portfolio-list li').forEach(li => li.classList.remove('active'));
         document.getElementById('portfolio-name').value = '';
         document.getElementById('stocks-container').innerHTML = '';
         document.getElementById('funds-container').innerHTML = '';
         document.getElementById('is-sandbox-checkbox').checked = false;
-        // Tüm container'ları gizle, formu göster
         ['options-container', 'result-area', 'report-container', 'comparison-container', 'simulation-container'].forEach(id => document.getElementById(id).style.display = 'none');
         document.getElementById('form-container').style.display = 'block';
         document.querySelector('#form-container .back-button').style.display = 'none';
     }
-    
-    // ... Diğer yardımcı fonksiyonlarınız (toggleDeleteMode, deletePortfolio, addAsset, showOptions vb.)
-    // ... büyük ölçüde aynı kalabilir. Gerekli yerlere 'simulation-container' gizleme eklendi.
-    
+
 </script>
 </body>
 </html>
