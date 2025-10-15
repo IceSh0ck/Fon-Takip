@@ -5,66 +5,57 @@ import yfinance as yf
 import requests
 from datetime import date, timedelta, datetime
 import pandas as pd
-from supabase import create_client, Client
+from supabase import create_client, Client # YENİ: Supabase kütüphanesini import et
 
 app = Flask(__name__)
 
-# --- SUPABASE BAĞLANTISI (BİLGİLER DOĞRUDAN KOD İÇİNDE) ---
-# DİKKAT: BU YÖNTEM GÜVENLİ DEĞİLDİR VE SADECE TEST İÇİN KULLANILMALIDIR.
-# KODUNUZU PAYLAŞIRSANIZ HERKES VERİTABANINIZA ERİŞEBİLİR.
-
-SUPABASE_URL = "https://zaihijqapqxakdohubyr.supabase.co"
-SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InphaWhpanFhcHF4YWtkb2h1YnlyIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2MDM1NzQzNCwiZXhwIjoyMDc1OTMzNDM0fQ.PrqIn__4qMaTwV_s6111QT_qKy6bKKAuv7v2YnJwQwc"
+# --- SUPABASE BAĞLANTISI ---
+# Render'a eklediğimiz Environment Variable'ları burada kullanıyoruz
+SUPABASE_URL = os.environ.get("SUPABASE_URL")
+SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 
-# --- DEĞİŞTİ: VERİ YÜKLEME VE KAYDETME FONKSİYONLARI (SUPABASE İÇİN) ---
+# --- YENİ VERİ YÜKLEME VE KAYDETME FONKSİYONLARI (SUPABASE İÇİN) ---
 
 def load_portfolios():
-    """Supabase'den tüm portföyleri yükler ve 'ana'/'deneme' olarak ayırır."""
-    portfolios_data = {"main": {}, "sandbox": {}}
+    """Supabase veritabanından tüm portföyleri yükler."""
     try:
-        # 'is_sandbox' sütununu da seçiyoruz
-        response = supabase.table('portfolios').select('name, data, is_sandbox').execute()
-        
-        for row in response.data:
-            portfolio_type = "sandbox" if row.get('is_sandbox') else "main"
-            # Yapıyı { 'portfolio_name': { 'data': {...}, 'is_sandbox': True/False } } şeklinde saklıyoruz
-            portfolios_data[portfolio_type][row['name']] = {
-                'data': row['data'],
-                'is_sandbox': row.get('is_sandbox', False)
-            }
-        return portfolios_data
+        # 'portfolios' tablosundan 'name' ve 'data' sütunlarını seçiyoruz
+        response = supabase.table('portfolios').select('name, data').execute()
+        # Gelen veriyi { 'portfolio_name': { 'current': ..., 'history': ... } } formatına çeviriyoruz
+        portfolios_dict = {row['name']: row['data'] for row in response.data}
+        return portfolios_dict
     except Exception as e:
         print(f"Supabase'den veri yüklenirken hata: {e}")
-        return {"main": {}, "sandbox": {}}
+        return {}
 
-def save_portfolios(portfolios_data):
-    """Tüm portföy verisini Supabase'e kaydeder/günceller."""
+def save_portfolios(portfolios_dict):
+    """Tüm portföy sözlüğünü Supabase veritabanına kaydeder/günceller."""
     try:
-        # Tüm portföyleri tek bir listeye toplayalım
-        all_local_portfolios = {**portfolios_data.get('main', {}), **portfolios_data.get('sandbox', {})}
-        
+        # Önce veritabanında olup da güncel listede olmayan (yani silinmiş) portföyleri bulalım
         response = supabase.table('portfolios').select('name').execute()
         db_names = {row['name'] for row in response.data}
-        local_names = set(all_local_portfolios.keys())
+        local_names = set(portfolios_dict.keys())
         names_to_delete = list(db_names - local_names)
 
+        # Eğer silinecek portföy varsa, veritabanından silelim
         if names_to_delete:
             supabase.table('portfolios').delete().in_('name', names_to_delete).execute()
 
-        if all_local_portfolios:
-            records_to_save = [
-                {'name': name, 'data': details['data'], 'is_sandbox': details.get('is_sandbox', False)}
-                for name, details in all_local_portfolios.items()
-            ]
+        # Sonra eklenecek/güncellenecek portföyleri "upsert" ile tek seferde halledelim
+        # upsert: Kayıt varsa günceller, yoksa yeni kayıt oluşturur. 'name' sütununu anahtar olarak kullanır.
+        if portfolios_dict:
+            records_to_save = [{'name': name, 'data': data} for name, data in portfolios_dict.items()]
             supabase.table('portfolios').upsert(records_to_save).execute()
             
     except Exception as e:
         print(f"Supabase'e veri kaydedilirken hata: {e}")
 
 
-# --- API ENDPOINT'LERİ ---
+# --- API ENDPOINT'LERİ (BU BÖLÜMDE HİÇBİR DEĞİŞİKLİK YOK) ---
+# Endpoint'leriniz load_portfolios ve save_portfolios kullandığı için
+# bu fonksiyonların içini değiştirmemiz yeterli oldu.
 
 @app.route('/')
 def index():
@@ -72,27 +63,15 @@ def index():
 
 @app.route('/get_portfolios', methods=['GET'])
 def get_portfolios():
-    # --- DEĞİŞTİ: Portföyleri artık gruplanmış olarak gönderiyoruz ---
     portfolios = load_portfolios()
-    # Sadece isim listelerini gönderiyoruz
-    response_data = {
-        "main": sorted(list(portfolios["main"].keys())),
-        "sandbox": sorted(list(portfolios["sandbox"].keys()))
-    }
-    return jsonify(response_data)
+    return jsonify(sorted(list(portfolios.keys())))
 
 @app.route('/get_portfolio/<portfolio_name>', methods=['GET'])
 def get_portfolio(portfolio_name):
     portfolios = load_portfolios()
-    all_portfolios = {**portfolios.get('main', {}), **portfolios.get('sandbox', {})}
-    portfolio_container = all_portfolios.get(portfolio_name)
-    
-    if portfolio_container and 'data' in portfolio_container and 'current' in portfolio_container['data']:
-        # --- DEĞİŞTİ: Portföyün deneme olup olmadığını da gönderiyoruz ---
-        response = portfolio_container['data']['current']
-        response['is_sandbox'] = portfolio_container.get('is_sandbox', False)
-        return jsonify(response)
-        
+    portfolio_data = portfolios.get(portfolio_name)
+    if portfolio_data and 'current' in portfolio_data:
+        return jsonify(portfolio_data['current'])
     return jsonify({'error': 'Portföy bulunamadı'}), 404
 
 @app.route('/save_portfolio', methods=['POST'])
@@ -101,95 +80,27 @@ def save_portfolio():
     portfolio_name = data.get('name')
     stocks = data.get('stocks', [])
     funds = data.get('funds', [])
-    is_sandbox = data.get('is_sandbox', False) # --- YENİ: Portföyün türünü alıyoruz ---
-
     if not portfolio_name or (not stocks and not funds):
         return jsonify({'error': 'Portföy adı ve en az bir varlık girilmelidir'}), 400
     
-    portfolios_data = load_portfolios()
-    all_portfolios = {**portfolios_data.get('main', {}), **portfolios_data.get('sandbox', {})}
-
-    # Önceki versiyonu bulup geçmişe ekleme
-    portfolio_container = all_portfolios.get(portfolio_name, {'data': {'current': None, 'history': []}, 'is_sandbox': is_sandbox})
-    
-    if portfolio_container.get('data', {}).get('current'):
-        previous_version = portfolio_container['data']['current']
-        previous_version['save_timestamp'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        if 'save_date' in previous_version: del previous_version['save_date']
-        
-        portfolio_container['data']['history'].insert(0, previous_version)
-        portfolio_container['data']['history'] = portfolio_container['data']['history'][:5]
-
-    # Yeni güncel versiyonu oluşturma
-    new_current_version = {'name': portfolio_name, 'stocks': stocks, 'funds': funds}
-    portfolio_container['data']['current'] = new_current_version
-    portfolio_container['is_sandbox'] = is_sandbox
-
-    # Portföyü doğru kategoriye yerleştirme
-    portfolio_type = "sandbox" if is_sandbox else "main"
-    if portfolio_name in portfolios_data.get("main", {}): del portfolios_data["main"][portfolio_name]
-    if portfolio_name in portfolios_data.get("sandbox", {}): del portfolios_data["sandbox"][portfolio_name]
-    
-    portfolios_data[portfolio_type][portfolio_name] = portfolio_container
-    
-    save_portfolios(portfolios_data)
-    return jsonify({'success': f'"{portfolio_name}" portföyü başarıyla kaydedildi.'})
-
-
-@app.route('/delete_portfolio', methods=['POST'])
-def delete_portfolio():
-    data = request.get_json()
-    portfolio_name_to_delete = data.get('name')
-    if not portfolio_name_to_delete: return jsonify({'error': 'Silinecek portföy adı belirtilmedi.'}), 400
-    
     portfolios = load_portfolios()
-    # --- DEĞİŞTİ: Her iki listeden de silmeyi deniyoruz ---
-    if portfolio_name_to_delete in portfolios['main']:
-        del portfolios['main'][portfolio_name_to_delete]
-    elif portfolio_name_to_delete in portfolios['sandbox']:
-        del portfolios['sandbox'][portfolio_name_to_delete]
-    else:
-        return jsonify({'error': 'Silinecek portföy bulunamadı.'}), 404
+    portfolio_container = portfolios.get(portfolio_name, {'current': None, 'history': []})
+    
+    if portfolio_container.get('current'):
+        previous_version = portfolio_container['current']
+        previous_version['save_timestamp'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        if 'save_date' in previous_version:
+            del previous_version['save_date']
         
+        portfolio_container['history'].insert(0, previous_version)
+        portfolio_container['history'] = portfolio_container['history'][:5]
+
+    new_current_version = {'name': portfolio_name, 'stocks': stocks, 'funds': funds}
+    portfolio_container['current'] = new_current_version
+    portfolios[portfolio_name] = portfolio_container
+    
     save_portfolios(portfolios)
-    return jsonify({'success': f'"{portfolio_name_to_delete}" portföyü başarıyla silindi.'})
-
-
-# --- YENİ: SİMÜLASYON İÇİN ANLIK FİYAT ENDPOINT'İ ---
-@app.route('/get_live_prices', methods=['POST'])
-def get_live_prices():
-    data = request.get_json()
-    tickers = data.get('tickers', [])
-    if not tickers:
-        return jsonify({'error': 'Fiyatı alınacak kod belirtilmedi.'}), 400
-
-    prices = {}
-    sdt, fdt = (date.today() - timedelta(days=5)).strftime('%d-%m-%Y'), date.today().strftime('%d-%m-%Y')
-
-    for ticker in tickers:
-        is_stock = ticker.endswith('.IS')
-        try:
-            if is_stock:
-                stock_data = yf.Ticker(ticker).history(period="1d")
-                if not stock_data.empty:
-                    prices[ticker.replace('.IS', '')] = stock_data['Close'].iloc[-1]
-                else:
-                    prices[ticker.replace('.IS', '')] = None
-            else: # Fon
-                res = requests.get(f"https://www.tefas.gov.tr/api/DB/BindHistoryPrice?sdt={sdt}&fdt={fdt}&kod={ticker}", timeout=5)
-                fund_data = [i for i in res.json() if i.get('BirimPayDegeri') is not None]
-                if fund_data:
-                    prices[ticker] = fund_data[-1]['BirimPayDegeri']
-                else:
-                    prices[ticker] = None
-        except Exception as e:
-            print(f"Fiyat alınırken hata ({ticker}): {e}")
-            prices[ticker.replace('.IS', '')] = None
-            
-    return jsonify(prices)
-
-
-# --- Diğer Endpoint'lerde Değişiklik Yok ---
+    return jsonify({'success': f'"{portfolio_name}" portföyü başarıyla kaydedildi.'})
 
 @app.route('/calculate', methods=['POST'])
 def calculate():
@@ -232,10 +143,8 @@ def calculate():
 
 @app.route('/calculate_historical/<portfolio_name>', methods=['GET'])
 def calculate_historical(portfolio_name):
-    portfolios_data = load_portfolios()
-    all_portfolios = {**portfolios_data.get('main', {}), **portfolios_data.get('sandbox', {})}
-    portfolio_container = all_portfolios.get(portfolio_name, {}).get('data')
-
+    portfolios = load_portfolios()
+    portfolio_container = portfolios.get(portfolio_name)
     if not portfolio_container: return jsonify({'error': 'Portföy bulunamadı'}), 404
     portfolio = portfolio_container.get('current')
     if not portfolio: return jsonify({'error': 'Portföyün güncel versiyonu bulunamadı.'}), 404
@@ -279,34 +188,26 @@ def calculate_historical(portfolio_name):
 
 @app.route('/get_portfolio_history/<portfolio_name>', methods=['GET'])
 def get_portfolio_history(portfolio_name):
-    portfolios_data = load_portfolios()
-    all_portfolios = {**portfolios_data.get('main', {}), **portfolios_data.get('sandbox', {})}
-    portfolio_container = all_portfolios.get(portfolio_name, {}).get('data')
-
-    if not portfolio_container or not portfolio_container.get('current'):
+    portfolios = load_portfolios()
+    portfolio_data = portfolios.get(portfolio_name)
+    if not portfolio_data or not portfolio_data.get('current'):
         return jsonify({'error': 'Portföy veya geçmişi bulunamadı.'}), 400
     
-    for entry in portfolio_container.get('history', []):
+    for entry in portfolio_data.get('history', []):
         if 'save_timestamp' in entry:
             try:
                 dt_obj = datetime.strptime(entry['save_timestamp'], '%Y-%m-%d %H:%M:%S')
                 entry['display_timestamp'] = dt_obj.strftime('%d.%m.%Y %H:%M')
             except ValueError:
-                entry['display_timestamp'] = entry['save_timestamp']
+                entry['display_timestamp'] = entry['save_timestamp'] 
 
-    return jsonify(portfolio_container)
+    return jsonify(portfolio_data)
+
 
 @app.route('/revert_portfolio/<portfolio_name>', methods=['POST'])
 def revert_portfolio(portfolio_name):
-    portfolios_data = load_portfolios()
-    all_portfolios = {**portfolios_data.get('main', {}), **portfolios_data.get('sandbox', {})}
-    
-    if portfolio_name not in all_portfolios:
-        return jsonify({'error': 'Portföy bulunamadı.'}), 404
-
-    portfolio_details = all_portfolios[portfolio_name]
-    portfolio_data = portfolio_details['data']
-
+    portfolios = load_portfolios()
+    portfolio_data = portfolios.get(portfolio_name)
     if not portfolio_data or not portfolio_data.get('history'):
         return jsonify({'error': 'Geri alınacak bir önceki versiyon bulunamadı.'}), 400
     
@@ -316,15 +217,23 @@ def revert_portfolio(portfolio_name):
     if 'save_date' in last_history_item: del last_history_item['save_date']
 
     portfolio_data['current'] = last_history_item
-    
-    # Doğru kategoriye geri koy
-    portfolio_type = "sandbox" if portfolio_details.get('is_sandbox') else "main"
-    portfolios_data[portfolio_type][portfolio_name]['data'] = portfolio_data
-
-    save_portfolios(portfolios_data)
+    portfolios[portfolio_name] = portfolio_data
+    save_portfolios(portfolios)
     return jsonify({'success': f'"{portfolio_name}" portföyü bir önceki versiyona başarıyla geri alındı.'})
 
+@app.route('/delete_portfolio', methods=['POST'])
+def delete_portfolio():
+    data = request.get_json()
+    portfolio_name_to_delete = data.get('name')
+    if not portfolio_name_to_delete: return jsonify({'error': 'Silinecek portföy adı belirtilmedi.'}), 400
+    
+    portfolios = load_portfolios()
+    if portfolio_name_to_delete in portfolios:
+        del portfolios[portfolio_name_to_delete]
+        save_portfolios(portfolios)
+        return jsonify({'success': f'"{portfolio_name_to_delete}" portföyü başarıyla silindi.'})
+    else:
+        return jsonify({'error': 'Silinecek portföy bulunamadı.'}), 404
 
 if __name__ == '__main__':
     app.run(debug=True)
-
