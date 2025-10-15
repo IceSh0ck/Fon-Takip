@@ -9,9 +9,12 @@ from supabase import create_client, Client
 
 app = Flask(__name__)
 
-# --- SUPABASE BAĞLANTISI ---
-SUPABASE_URL = os.environ.get("SUPABASE_URL")
-SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
+# --- SUPABASE BAĞLANTISI (BİLGİLER DOĞRUDAN KOD İÇİNDE) ---
+# DİKKAT: BU YÖNTEM GÜVENLİ DEĞİLDİR VE SADECE TEST İÇİN KULLANILMALIDIR.
+# KODUNUZU PAYLAŞIRSANIZ HERKES VERİTABANINIZA ERİŞEBİLİR.
+
+SUPABASE_URL = "https://zaihijqapqxakdohubyr.supabase.co"
+SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InphaWhpanFhcHF4YWtkb2h1YnlyIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2MDM1NzQzNCwiZXhwIjoyMDc1OTMzNDM0fQ.PrqIn__4qMaTwV_s6111QT_qKy6bKKAuv7v2YnJwQwc"
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 
@@ -324,3 +327,4 @@ def revert_portfolio(portfolio_name):
 
 if __name__ == '__main__':
     app.run(debug=True)
+
