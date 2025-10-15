@@ -13,6 +13,7 @@
             margin: 0;
             padding: 20px;
         }
+        /* YENİ: TARİH-SAAT GÖSTERGESİ STİLİ */
         #datetime-container {
             position: fixed;
             top: 15px;
@@ -30,46 +31,90 @@
             max-width: 900px;
             margin: 20px auto;
         }
+        /* Dashboard Kart Stilleri */
         #dashboard-container .fund-card {
-            background: #fff; border-radius: 8px; padding: 20px; margin-bottom: 15px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.08); cursor: pointer; transition: transform 0.2s, box-shadow 0.2s;
+            background: #fff;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 15px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.08);
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
         }
         #dashboard-container .fund-card:hover {
-            transform: translateY(-3px); box-shadow: 0 6px 20px rgba(0,0,0,0.12);
+            transform: translateY(-3px);
+            box-shadow: 0 6px 20px rgba(0,0,0,0.12);
         }
         .fund-header {
-            display: flex; justify-content: space-between; align-items: center;
-            border-bottom: 1px solid #eee; padding-bottom: 15px; margin-bottom: 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 15px;
+            margin-bottom: 15px;
         }
-        .fund-name { font-size: 1.4em; font-weight: 600; color: #2c3e50; }
-        .fund-return { font-size: 1.4em; font-weight: bold; }
-        .fund-stocks-row { display: flex; justify-content: space-between; align-items: center; font-size: 0.95em; }
-        .stock-group { display: flex; gap: 20px; }
-        .stock-item .ticker { font-weight: 500; }
+        .fund-name {
+            font-size: 1.4em;
+            font-weight: 600;
+            color: #2c3e50;
+        }
+        .fund-return {
+            font-size: 1.4em;
+            font-weight: bold;
+        }
+        .fund-stocks-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.95em;
+        }
+        .stock-group {
+            display: flex;
+            gap: 20px;
+        }
+        .stock-item .ticker {
+            font-weight: 500;
+        }
         .positive { color: #27ae60; }
         .negative { color: #c0392b; }
-        .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+
+        /* Diğer Sayfalar ve Butonlar */
+        .page-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
         .back-button-top {
-            background: #7f8c8d; color: white; padding: 8px 15px; border: none;
-            border-radius: 5px; cursor: pointer; font-size: 14px;
+            background: #7f8c8d;
+            color: white;
+            padding: 8px 15px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
         }
         .back-button-top:hover { background: #6c7a89; }
+        
         .loader {
-            border: 5px solid #f3f3f3; border-top: 5px solid #3498db; border-radius: 50%;
-            width: 50px; height: 50px; animation: spin 1s linear infinite; margin: 100px auto;
+            border: 5px solid #f3f3f3;
+            border-top: 5px solid #3498db;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin: 100px auto;
         }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        
+        /* Form elemanları için genel stiller */
         .btn-add { background-color: #2ecc71; color:white; padding: 8px 15px; border:none; border-radius:4px; cursor:pointer; font-size: 14px; margin-top:10px; }
         .stock-row { display: grid; grid-template-columns: 2fr 1fr 1fr auto; gap: 10px; margin-bottom: 10px; align-items: center; }
-        input[type="text"], input[type="number"], select { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+        input[type="text"], input[type="number"] { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
         .options-menu button { display: block; width: 100%; text-align: left; margin-bottom: 10px; background-color: #34495e; color:white; padding: 12px 20px; border: none; border-radius: 4px; cursor: pointer; font-size: 16px;}
         .options-menu button:hover { background-color: #2c3e50; }
         .btn-remove { background-color: #e74c3c; color:white; padding: 5px 10px; font-size: 12px; border:none; border-radius:4px; cursor:pointer; }
-        .detail-table { width: 100%; margin-top: 10px; border-collapse: collapse; }
-        .detail-table th, .detail-table td { padding: 12px; border: 1px solid #ddd; text-align: left; }
-        .detail-table th { background-color: #bdc3c7; }
-        .comparison-selector { display: flex; flex-wrap: wrap; gap: 20px; align-items: center; justify-content: center; margin-bottom: 20px; padding: 15px; background-color: #ecf0f1; border-radius: 6px;}
-        .btn-revert { background-color: #f39c12; margin-top: 20px; color:white; padding: 12px 20px; border: none; border-radius: 4px; cursor: pointer; font-size: 16px;} .btn-revert:hover { background-color: #e67e22; }
+
 
     </style>
 </head>
@@ -84,96 +129,106 @@
                 <button id="btn-new-fund-main" style="background-color: #3498db; color:white; padding: 10px 15px; border:none; border-radius:5px; cursor:pointer; font-size: 16px;">Yeni Fon Ekle</button>
             </div>
         </div>
-        <div id="dashboard-container"><div class="loader"></div></div>
+        <div id="dashboard-container">
+            <div class="loader"></div>
+        </div>
     </div>
 
-    <div id="form-view" class="main-view-container" style="display: none;"></div>
-    <div id="options-view" class="main-view-container" style="display: none;"></div>
+    <div id="form-view" class="main-view-container" style="display: none;">
+        </div>
     
-    <div id="pie-chart-view" class="main-view-container" style="display: none;">
-        <div class="page-header">
-            <h2 id="report-title"></h2>
-            <button onclick="showCurrentOptions()" class="back-button-top">&larr; İşlemlere Dön</button>
+    <div id="options-view" class="main-view-container" style="display: none;">
         </div>
-        <div style="width: 80%; max-width: 500px; margin: auto;"><canvas id="portfolioPieChart"></canvas></div>
-    </div>
-
-    <div id="history-view" class="main-view-container" style="display: none;">
-        <div class="page-header">
-             <h2 id="comparison-title"></h2>
-             <button onclick="showCurrentOptions()" class="back-button-top">&larr; İşlemlere Dön</button>
-        </div>
-        <div id="comparison-table-container"></div>
-    </div>
-
-    <div id="historical-chart-view" class="main-view-container" style="display: none;">
-         <div class="page-header">
-             <h2 id="historical-title"></h2>
-             <button onclick="showCurrentOptions()" class="back-button-top">&larr; İşlemlere Dön</button>
-        </div>
-        <canvas id="historicalLineChart"></canvas>
-    </div>
-
 
 <script>
-    let currentPortfolioName = null; // Aktif olarak işlem yapılan fonun adını tutar
-    let portfolioChart = null;
-    let historicalChart = null;
-
     document.addEventListener('DOMContentLoaded', () => { 
         loadDashboard();
         document.getElementById('btn-new-fund-main').addEventListener('click', showNewPortfolioForm);
-        updateDateTime();
-        setInterval(updateDateTime, 1000);
+        
+        // YENİ: SAATİ BAŞLATMA VE HER SANİYE GÜNCELLEME
+        updateDateTime(); // Sayfa açılır açılmaz saati göster
+        setInterval(updateDateTime, 1000); // Her saniye güncelle
     });
 
+    // YENİ: TARİH VE SAATİ GÜNCELLEYEN FONKSİYON
     function updateDateTime() {
         const now = new Date();
-        const dateString = now.toLocaleDateString('tr-TR', { day: '2-digit', month: '2-digit', year: 'numeric' });
-        const timeString = now.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        const dateOptions = { day: '2-digit', month: '2-digit', year: 'numeric' };
+        const timeOptions = { hour: '2-digit', minute: '2-digit', second: '2-digit' };
+        
+        const dateString = now.toLocaleDateString('tr-TR', dateOptions);
+        const timeString = now.toLocaleTimeString('tr-TR', timeOptions);
+        
         document.getElementById('datetime-container').textContent = `${dateString} - ${timeString}`;
     }
 
+    // --- GÖRÜNÜM YÖNETİCİSİ ---
     function showView(viewId) {
-        ['dashboard-view', 'form-view', 'options-view', 'pie-chart-view', 'history-view', 'historical-chart-view'].forEach(id => {
-            const el = document.getElementById(id);
-            if(el) el.style.display = 'none';
+        document.querySelectorAll('.main-view-container').forEach(view => {
+            view.style.display = 'none';
         });
-        const viewToShow = document.getElementById(viewId);
-        if(viewToShow) viewToShow.style.display = 'block';
+        document.getElementById(viewId).style.display = 'block';
     }
 
+    // --- DASHBOARD OLUŞTURMA ---
     async function loadDashboard() {
         showView('dashboard-view');
         const container = document.getElementById('dashboard-container');
         container.innerHTML = '<div class="loader"></div>';
+
         try {
             const response = await fetch('/get_dashboard_data');
             if (!response.ok) throw new Error('Veri alınamadı');
             const data = await response.json();
+            
             container.innerHTML = '';
             if (!data.sorted_portfolios || data.sorted_portfolios.length === 0) {
-                container.innerHTML = '<p>Kayıtlı fon bulunamadı.</p>'; return;
+                container.innerHTML = '<p>Kayıtlı fon bulunamadı. Eklemek için "Yeni Fon Ekle" butonuna tıklayın.</p>';
+                return;
             }
+
             data.sorted_portfolios.forEach(p => {
                 const card = document.createElement('div');
                 card.className = 'fund-card';
                 card.onclick = () => showOptions(p.name);
+
                 const change = p.change;
                 const changeClass = change >= 0 ? 'positive' : 'negative';
                 const sign = change > 0 ? '+' : '';
-                const topStocksHTML = p.top_stocks.map(s => `<div class="stock-item"><span class="ticker">${s.ticker}</span> <span class="positive">+${s.daily_change.toFixed(2)}%</span></div>`).join('');
-                const bottomStocksHTML = p.bottom_stocks.map(s => `<div class="stock-item"><span class="ticker">${s.ticker}</span> <span class="negative">${s.daily_change.toFixed(2)}%</span></div>`).join('');
-                card.innerHTML = `<div class="fund-header"><span class="fund-name">${p.name}</span><span class="fund-return ${changeClass}">${sign}${change.toFixed(2)}%</span></div><div class="fund-stocks-row"><div class="stock-group">${topStocksHTML || ''}</div><div class="stock-group">${bottomStocksHTML || ''}</div></div>`;
+
+                const topStocksHTML = p.top_stocks.map(s => `
+                    <div class="stock-item">
+                        <span class="ticker">${s.ticker}</span>
+                        <span class="positive">+${s.daily_change.toFixed(2)}%</span>
+                    </div>`).join('');
+
+                const bottomStocksHTML = p.bottom_stocks.map(s => `
+                    <div class="stock-item">
+                        <span class="ticker">${s.ticker}</span>
+                        <span class="negative">${s.daily_change.toFixed(2)}%</span>
+                    </div>`).join('');
+                
+                card.innerHTML = `
+                    <div class="fund-header">
+                        <span class="fund-name">${p.name}</span>
+                        <span class="fund-return ${changeClass}">${sign}${change.toFixed(2)}%</span>
+                    </div>
+                    <div class="fund-stocks-row">
+                        <div class="stock-group">${topStocksHTML || 'Kazanan yok'}</div>
+                        <div class="stock-group">${bottomStocksHTML || 'Kaybeden yok'}</div>
+                    </div>
+                `;
                 container.appendChild(card);
             });
+
         } catch (error) {
-            container.innerHTML = `<p style="color:red;">Hata: Dashboard verileri yüklenemedi.</p>`;
+            container.innerHTML = `<p style="color:red;">Hata: Dashboard verileri yüklenemedi. Lütfen daha sonra tekrar deneyin.</p>`;
+            console.error("Dashboard hatası:", error);
         }
     }
 
+    // --- SEÇENEKLER MENÜSÜ GÖRÜNÜMÜ ---
     function showOptions(name) {
-        currentPortfolioName = name; // İşlem yapılan fonu global değişkene ata
         const view = document.getElementById('options-view');
         view.innerHTML = `
             <div class="page-header">
@@ -182,89 +237,133 @@
             </div>
             <div id="live-return-display" style="text-align:center; font-size: 1.5em; margin-bottom: 20px;">Hesaplanıyor...</div>
             <div class="options-menu">
-                <button onclick="displayPieChartReport()">1. Fon Portföy Dağılım Grafiği</button>
-                <button onclick="displayWeightChangeReport()">2. Fon Portföy Geçmişi</button>
-                <button onclick="displayHistoricalReturns()">3. Son 30 Günlük Fon Getirisi</button>
-                <button onclick="showPortfolioEditor('${name}')">4. Fon Portföyünü Değiştir</button>
-                <button onclick="deletePortfolio('${name}')" style="background-color: #e74c3c;">5. Fonu Sil</button>
+                <button onclick="alert('Bu özellik yakında eklenecektir.')">1. Fon Portföy Dağılım Grafiği</button>
+                <button onclick="alert('Bu özellik yakında eklenecektir.')">2. Fon Portföy Geçmişi</button>
+                <button onclick="showPortfolioEditor('${name}')">3. Fon Portföyünü Değiştir</button>
+                <button onclick="deletePortfolio('${name}')" style="background-color: #e74c3c;">4. Fonu Sil</button>
             </div>
         `;
+        
         showView('options-view');
         fetchAndDisplayLiveReturn(name, 'live-return-display');
     }
 
-    // Geri butonlarının mevcut fonun seçenekler menüsüne dönmesi için
-    function showCurrentOptions() {
-        if (currentPortfolioName) {
-            showOptions(currentPortfolioName);
-        } else {
-            loadDashboard(); // Eğer bir sebepten ötürü fon adı kaybolursa ana ekrana dön
+    // --- FORM GÖRÜNÜMÜ (YENİ EKLEME / DÜZENLEME) ---
+    function showPortfolioEditor(name = null) {
+        const view = document.getElementById('form-view');
+        const isEditing = name !== null;
+        
+        view.innerHTML = `
+             <div class="page-header">
+                <h2>${isEditing ? `"${name}" Fonunu Düzenle` : "Yeni Fon Oluştur"}</h2>
+                <button onclick="loadDashboard()" class="back-button-top">&larr; Dashboard'a Dön</button>
+            </div>
+            <form id="portfolio-form">
+                <input type="text" id="portfolio-name" placeholder="Fon Adı" required style="width: 100%; margin-bottom:20px;">
+                <h3>Hisse Senetleri</h3><div id="stocks-container"></div>
+                <button type="button" class="btn-add" onclick="addAsset('stock')">Yeni Hisse Ekle</button>
+                <h3 style="margin-top:20px;">Yatırım Fonları</h3><div id="funds-container"></div>
+                <button type="button" class="btn-add" onclick="addAsset('fund')">Yeni Fon Ekle</button>
+                <hr style="margin: 20px 0;">
+                <button type="submit" style="background-color: #1abc9c; color:white; padding: 12px 20px; border:none; border-radius: 4px; font-size:16px; cursor:pointer;">Kaydet</button>
+            </form>
+        `;
+        
+        const form = view.querySelector('#portfolio-form');
+        form.onsubmit = (event) => {
+            event.preventDefault();
+            savePortfolio(isEditing ? name : null);
+        };
+
+        const nameInput = view.querySelector('#portfolio-name');
+        nameInput.value = isEditing ? name : '';
+        
+        if (isEditing) {
+            fetch(`/get_portfolio/${name}`)
+                .then(res => res.json())
+                .then(portfolio => {
+                    (portfolio.stocks || []).forEach(s => addAsset('stock', s.ticker, s.weight, s.adet));
+                    (portfolio.funds || []).forEach(f => addAsset('fund', f.ticker, f.weight, f.adet));
+                });
         }
+        
+        showView('form-view');
+    }
+
+    function showNewPortfolioForm() {
+        showPortfolioEditor(null);
     }
     
-    // --- GERİ GETİRİLEN RAPOR FONKSİYONLARI ---
+    // --- VERİ İŞLEME FONKSİYONLARI ---
+    
+    async function savePortfolio(originalName = null) {
+        const portfolioName = document.getElementById('portfolio-name').value.trim();
+        if (!portfolioName) { alert('Lütfen bir fon adı girin.'); return; }
+        
+        const stocks = Array.from(document.querySelectorAll('#stocks-container .stock-row')).map(r => ({ ticker: r.children[0].value.trim().toUpperCase(), weight: r.children[1].value, adet: r.children[2].value }));
+        const funds = Array.from(document.querySelectorAll('#funds-container .stock-row')).map(r => ({ ticker: r.children[0].value.trim().toUpperCase(), weight: r.children[1].value, adet: r.children[2].value }));
 
-    async function displayPieChartReport() {
-        showView('pie-chart-view');
-        document.getElementById('report-title').textContent = `"${currentPortfolioName}" Dağılım Grafiği`;
-        const response = await fetch(`/get_portfolio/${currentPortfolioName}`);
-        const portfolio = await response.json();
-        const assets = (portfolio.stocks || []).concat(portfolio.funds || []);
-        const labels = assets.map(a => a.ticker);
-        const data = assets.map(a => parseFloat(a.weight));
-        const ctx = document.getElementById('portfolioPieChart').getContext('2d');
-        if(portfolioChart) { portfolioChart.destroy(); }
-        portfolioChart = new Chart(ctx, { type: 'pie', data: { labels: labels, datasets: [{ data: data }] }});
-    }
-
-    async function displayWeightChangeReport() {
-        showView('history-view');
-        const tableContainer = document.getElementById('comparison-table-container');
-        const title = document.getElementById('comparison-title');
-        title.textContent = `"${currentPortfolioName}" Geçmişi Yükleniyor...`;
-        tableContainer.innerHTML = '<div class="loader"></div>';
-        // Bu fonksiyonun içeriği çok uzun olduğu için orijinal kodunuzdan kopyalayıp
-        // renderComparisonTable gibi iç mantığı buraya ekleyebilirsiniz.
-        // Şimdilik temel iskeleti kuruyorum:
-        const response = await fetch(`/get_portfolio_history/${currentPortfolioName}`);
-        const data = await response.json();
-        title.textContent = `"${currentPortfolioName}" Portföy Değişim Raporu`;
-        if (data.history.length === 0) {
-            tableContainer.innerHTML = "<p>Karşılaştırılacak geçmiş bir versiyon bulunamadı.</p>";
-            return;
+        const response = await fetch('/save_portfolio', { 
+            method: 'POST', 
+            headers: { 'Content-Type': 'application/json' }, 
+            body: JSON.stringify({ 
+                name: portfolioName, 
+                original_name: originalName,
+                stocks, 
+                funds 
+            }) 
+        });
+        const result = await response.json();
+        alert(response.ok ? result.success : 'Hata: ' + result.error);
+        if (response.ok) {
+            loadDashboard();
         }
-        // ... Buraya versiyonları karşılaştıran detaylı tablo oluşturma mantığı gelecek...
-        // Örnek:
-        tableContainer.innerHTML = "Geçmiş raporu özelliği başarıyla geri getirildi. Detaylı tablo burada oluşturulacak.";
     }
 
-    async function displayHistoricalReturns() {
-        showView('historical-chart-view');
-        const title = document.getElementById('historical-title');
-        title.textContent = `"${currentPortfolioName}" 30 Günlük Getiri Hesaplanıyor...`;
-        const canvasContainer = document.getElementById('historicalLineChart').getContext('2d');
+    async function deletePortfolio(name) {
+        if (confirm(`"${name}" fonunu kalıcı olarak silmek istediğinizden emin misiniz?`)) {
+            const response = await fetch('/delete_portfolio', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: name }) });
+            const result = await response.json();
+            alert(result.success || result.error);
+            if (response.ok) {
+                loadDashboard();
+            }
+        }
+    }
+
+    async function fetchAndDisplayLiveReturn(name, elementId) {
+        const displayDiv = document.getElementById(elementId);
         try {
-            const response = await fetch(`/calculate_historical/${currentPortfolioName}`);
-            const data = await response.json();
-            if (!response.ok) throw new Error(data.error);
-            title.textContent = `"${currentPortfolioName}" Son 30 Günlük Getiri Grafiği`;
-            if (historicalChart) { historicalChart.destroy(); }
-            historicalChart = new Chart(canvasContainer, {
-                type: 'line',
-                data: { labels: data.dates, datasets: [{ label: 'Günlük Getiri (%)', data: data.returns, borderColor: 'rgb(54, 162, 235)' }] }
+            const portfolioResponse = await fetch(`/get_portfolio/${name}`);
+            const portfolio = await portfolioResponse.json();
+            const calculateResponse = await fetch('/calculate', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(portfolio)
             });
-        } catch(error) {
-            title.textContent = `Hata: ${error.message}`;
+            const result = await calculateResponse.json();
+            if (calculateResponse.ok) {
+                const value = result.total_change;
+                displayDiv.textContent = `Anlık Getiri: ${value >= 0 ? '+' : ''}${value.toFixed(2)}%`;
+                displayDiv.className = value >= 0 ? 'positive' : 'negative';
+            } else { throw new Error(result.error); }
+        } catch (error) {
+            displayDiv.textContent = `Hata: Getiri hesaplanamadı.`;
+            displayDiv.className = 'negative';
         }
     }
 
-
-    // --- Form ve Veri İşleme Fonksiyonları ---
-
-    function showPortfolioEditor(name = null) {
-        // ... Bu fonksiyonun içeriği önceki cevapta olduğu gibi kalabilir ...
+    function addAsset(type, ticker = '', weight = '', adet = '') {
+        const container = document.getElementById(type === 'stock' ? 'stocks-container' : 'funds-container');
+        const newRow = document.createElement('div');
+        newRow.className = 'stock-row';
+        newRow.innerHTML = `
+            <input type="text" placeholder="${type === 'stock' ? 'Hisse Kodu' : 'Fon Kodu'}" value="${ticker}" required>
+            <input type="number" placeholder="Ağırlık (%)" value="${weight}" min="0.01" step="0.01" required>
+            <input type="number" placeholder="Adet (Opsiyonel)" value="${adet}" min="0">
+            <button type="button" class="btn-remove" onclick="this.parentElement.remove()">X</button>
+        `;
+        container.appendChild(newRow);
     }
-    // ... Diğer tüm yardımcı fonksiyonlar (save, delete, addAsset, fetchAndDisplayLiveReturn vb.) önceki cevaplardaki gibi kalabilir...
 
 </script>
 </body>
