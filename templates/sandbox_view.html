@@ -1,0 +1,75 @@
+{% extends "sandbox_base.html" %}
+{% block title %}{{ portfolio.name }} - Sandbox{% endblock %}
+{% block content %}
+    <h2>"{{ portfolio.name }}" Fonu Simülasyonu</h2>
+    <div style="margin-bottom: 20px; display:flex; gap:10px;">
+        <a class="button-link" href="{{ url_for('edit_sandbox_portfolio', portfolio_id=portfolio.id) }}">1. Fon Portföyünü Değiştir</a>
+        <a class="button-link" href="#" style="background-color:#1abc9c;">2. Fon Portföy Dağılımı Gör</a>
+    </div>
+    
+    <h3>Anlık Fon Ağırlık Değişim Tablosu</h3>
+    <table class="detail-table" id="live-portfolio-table">
+        <thead>
+            <tr>
+                <th>Hisse</th>
+                <th>Adet</th>
+                <th>Anlık Fiyat (₺)</th>
+                <th>Toplam Değer (₺)</th>
+                <th>Ağırlık (%)</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for stock in portfolio.holdings.get('stocks', []) %}
+            <tr data-ticker="{{ stock.ticker }}">
+                <td><b>{{ stock.ticker }}</b></td>
+                <td class="quantity">{{ stock.adet }}</td>
+                <td class="price">Hesaplanıyor...</td>
+                <td class="value">Hesaplanıyor...</td>
+                <td class="weight">Hesaplanıyor...</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+        <tfoot>
+            <tr>
+                <th colspan="3">TOPLAM DEĞER</th>
+                <th id="total-value">Hesaplanıyor...</th>
+                <th>100.00%</th>
+            </tr>
+        </tfoot>
+    </table>
+
+<script>
+    const portfolioHoldings = {{ portfolio.holdings | tojson }};
+
+    function updatePortfolioData() {
+        const totalValueCell = document.getElementById('total-value');
+        totalValueCell.textContent = 'Hesaplanıyor...';
+
+        fetch(`/api/sandbox/recalculate`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ holdings: portfolioHoldings }),
+        })
+        .then(response => response.json())
+        .then(data => {
+            const tableBody = document.querySelector("#live-portfolio-table tbody");
+            data.stocks.forEach(stock => {
+                const row = tableBody.querySelector(`tr[data-ticker="${stock.ticker}"]`);
+                if (row) {
+                    row.querySelector('.price').textContent = stock.price;
+                    row.querySelector('.value').textContent = stock.value.toLocaleString('tr-TR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                    row.querySelector('.weight').textContent = stock.weight;
+                }
+            });
+            totalValueCell.textContent = '₺ ' + data.total_value.toLocaleString('tr-TR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        })
+        .catch(error => {
+            console.error('Hata:', error);
+            totalValueCell.textContent = 'Hata oluştu';
+        });
+    }
+
+    document.addEventListener('DOMContentLoaded', updatePortfolioData);
+    setInterval(updatePortfolioData, 30000); // 30 saniyede bir güncelle
+</script>
+{% endblock %}
