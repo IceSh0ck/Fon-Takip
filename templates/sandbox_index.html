@@ -1,0 +1,16 @@
+{% extends "sandbox_base.html" %}
+{% block title %}Fon Seçimi - Sandbox Modu{% endblock %}
+{% block content %}
+    <h2>Denemek İçin Bir Fon Seçin</h2>
+    <p>Bu listedeki fonlar, ana portföyünüzle senkronize edilmiştir. İçeriklerinde yapacağınız değişiklikler sadece sandbox modunda geçerli olacaktır.</p>
+    <br>
+    <div class="portfolio-grid">
+        {% for portfolio in portfolios %}
+        <div class="portfolio-card">
+            <a href="{{ url_for('view_sandbox_portfolio', portfolio_id=portfolio.id) }}">{{ portfolio.name }}</a>
+        </div>
+        {% else %}
+        <p>Görüntülenecek sandbox fonu bulunamadı. Lütfen önce ana uygulamada bir fon oluşturun.</p>
+        {% endfor %}
+    </div>
+{% endblock %}
