@@ -5,25 +5,22 @@ import yfinance as yf
 import requests
 from datetime import date, timedelta, datetime
 import pandas as pd
-from supabase import create_client, Client # YENİ: Supabase kütüphanesini import et
+from supabase import create_client, Client
 
 app = Flask(__name__)
 
 # --- SUPABASE BAĞLANTISI ---
-# Render'a eklediğimiz Environment Variable'ları burada kullanıyoruz
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 
-# --- YENİ VERİ YÜKLEME VE KAYDETME FONKSİYONLARI (SUPABASE İÇİN) ---
+# --- VERİ YÜKLEME VE KAYDETME FONKSİYONLARI ---
 
 def load_portfolios():
     """Supabase veritabanından tüm portföyleri yükler."""
     try:
-        # 'portfolios' tablosundan 'name' ve 'data' sütunlarını seçiyoruz
         response = supabase.table('portfolios').select('name, data').execute()
-        # Gelen veriyi { 'portfolio_name': { 'current': ..., 'history': ... } } formatına çeviriyoruz
         portfolios_dict = {row['name']: row['data'] for row in response.data}
         return portfolios_dict
     except Exception as e:
@@ -33,18 +30,14 @@ def load_portfolios():
 def save_portfolios(portfolios_dict):
     """Tüm portföy sözlüğünü Supabase veritabanına kaydeder/günceller."""
     try:
-        # Önce veritabanında olup da güncel listede olmayan (yani silinmiş) portföyleri bulalım
         response = supabase.table('portfolios').select('name').execute()
         db_names = {row['name'] for row in response.data}
         local_names = set(portfolios_dict.keys())
         names_to_delete = list(db_names - local_names)
 
-        # Eğer silinecek portföy varsa, veritabanından silelim
         if names_to_delete:
             supabase.table('portfolios').delete().in_('name', names_to_delete).execute()
 
-        # Sonra eklenecek/güncellenecek portföyleri "upsert" ile tek seferde halledelim
-        # upsert: Kayıt varsa günceller, yoksa yeni kayıt oluşturur. 'name' sütununu anahtar olarak kullanır.
         if portfolios_dict:
             records_to_save = [{'name': name, 'data': data} for name, data in portfolios_dict.items()]
             supabase.table('portfolios').upsert(records_to_save).execute()
@@ -53,9 +46,7 @@ def save_portfolios(portfolios_dict):
         print(f"Supabase'e veri kaydedilirken hata: {e}")
 
 
-# --- API ENDPOINT'LERİ (BU BÖLÜMDE HİÇBİR DEĞİŞİKLİK YOK) ---
-# Endpoint'leriniz load_portfolios ve save_portfolios kullandığı için
-# bu fonksiyonların içini değiştirmemiz yeterli oldu.
+# --- API ENDPOINT'LERİ ---
 
 @app.route('/')
 def index():
@@ -234,6 +225,104 @@ def delete_portfolio():
         return jsonify({'success': f'"{portfolio_name_to_delete}" portföyü başarıyla silindi.'})
     else:
         return jsonify({'error': 'Silinecek portföy bulunamadı.'}), 404
+
+# YENİ EKLENEN ENDPOINT
+@app.route('/calculate_dynamic_weights', methods=['POST'])
+def calculate_dynamic_weights():
+    data = request.get_json()
+    stocks = data.get('stocks', [])
+    funds = data.get('funds', [])
+    if not stocks and not funds:
+        return jsonify({'error': 'Hesaplanacak veri gönderilmedi.'}), 400
+
+    total_portfolio_value = 0.0
+    asset_market_values = []
+    
+    # 1. Adım: Tüm varlıkların güncel piyasa değerlerini hesapla
+    for stock in stocks:
+        ticker, adet = stock.get('ticker').strip().upper(), int(stock.get('adet') or 0)
+        if adet == 0: continue
+        if ticker in ['NAKIT', 'CASH', 'TAHVIL', 'BOND', 'DEVLET TAHVILI']:
+            market_value = float(adet)
+            asset_market_values.append({'type': 'stock', 'ticker': ticker, 'adet': adet, 'market_value': market_value, 'data': None})
+            total_portfolio_value += market_value
+            continue
+            
+        yf_ticker = ticker + '.IS' if not ticker.endswith('.IS') else ticker
+        try:
+            hist = yf.Ticker(yf_ticker).history(period="2d")
+            if hist.empty: raise Exception("Veri yok")
+            latest_price = hist['Close'].iloc[-1]
+            market_value = latest_price * adet
+            asset_market_values.append({'type': 'stock', 'ticker': ticker, 'adet': adet, 'market_value': market_value, 'data': hist})
+            total_portfolio_value += market_value
+        except Exception as e:
+            print(f"Fiyat alınamadı ({ticker}): {e}")
+            asset_market_values.append({'type': 'stock', 'ticker': ticker, 'adet': adet, 'market_value': 0, 'data': None, 'error': 'Fiyat alınamadı'})
+
+    sdt, fdt = (date.today() - timedelta(days=10)).strftime('%d-%m-%Y'), date.today().strftime('%d-%m-%Y')
+    for fund in funds:
+        fund_code, adet = fund.get('ticker').strip().upper(), int(fund.get('adet') or 0)
+        if adet == 0: continue
+        try:
+            res = requests.get(f"https://www.tefas.gov.tr/api/DB/BindHistoryPrice?sdt={sdt}&fdt={fdt}&kod={fund_code}", timeout=10)
+            fund_data = [i for i in res.json() if i.get('BirimPayDegeri') is not None]
+            if not fund_data: raise Exception("Veri yok")
+            latest_price = fund_data[-1]['BirimPayDegeri']
+            market_value = latest_price * adet
+            asset_market_values.append({'type': 'fund', 'ticker': fund_code, 'adet': adet, 'market_value': market_value, 'data': fund_data})
+            total_portfolio_value += market_value
+        except Exception as e:
+            print(f"Fiyat alınamadı ({fund_code}): {e}")
+            asset_market_values.append({'type': 'fund', 'ticker': fund_code, 'adet': adet, 'market_value': 0, 'data': None, 'error': 'Fiyat alınamadı'})
+
+    if total_portfolio_value == 0:
+        return jsonify({'error': 'Portföy toplam değeri sıfır. Adetleri veya varlık kodlarını kontrol edin.'}), 400
+
+    # 2. Adım: Yeni (dinamik) ağırlıkları hesapla ve getiri analizini yap
+    total_portfolio_change = 0.0
+    asset_details = []
+    for asset in asset_market_values:
+        dynamic_weight = (asset['market_value'] / total_portfolio_value) * 100
+        
+        if asset.get('error'):
+            asset_details.append({**asset, 'dynamic_weight': 0.0, 'daily_change': 0.0, 'weighted_impact': 0.0})
+            continue
+
+        daily_change = 0.0
+        date_range = None
+        
+        if asset['type'] == 'stock':
+            hist = asset['data']
+            if hist is not None and len(hist) >= 2:
+                daily_change = (hist['Close'].iloc[-1] - hist['Close'].iloc[-2]) / hist['Close'].iloc[-2] * 100
+            elif asset['ticker'] in ['NAKIT', 'CASH', 'TAHVIL', 'BOND', 'DEVLET TAHVILI']:
+                 daily_change = 0.0
+
+        elif asset['type'] == 'fund':
+            fund_data = asset['data']
+            if len(fund_data) >= 2:
+                last, prev = fund_data[-1], fund_data[-2]
+                daily_change = (last['BirimPayDegeri'] - prev['BirimPayDegeri']) / prev['BirimPayDegeri'] * 100
+                date_range = f"{datetime.strptime(prev['Tarih'],'%Y-%m-%dT%H:%M:%S').strftime('%d.%m.%Y')} → {datetime.strptime(last['Tarih'],'%Y-%m-%dT%H:%M:%S').strftime('%d.%m.%Y')}"
+            else:
+                date_range = "Yetersiz Veri"
+
+        weighted_impact = (dynamic_weight / 100) * daily_change
+        total_portfolio_change += weighted_impact
+        
+        detail = {
+            'type': asset['type'],
+            'ticker': asset['ticker'],
+            'dynamic_weight': dynamic_weight,
+            'daily_change': daily_change,
+            'weighted_impact': weighted_impact
+        }
+        if date_range: detail['date_range'] = date_range
+        asset_details.append(detail)
+        
+    return jsonify({'total_change': total_portfolio_change, 'details': asset_details})
+
 
 if __name__ == '__main__':
     app.run(debug=True)
