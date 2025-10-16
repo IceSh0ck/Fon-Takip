@@ -71,6 +71,7 @@
                 <button id="btn-show-comparison">2. Fon Portföyü Geçmişin Gör</button>
                 <button id="btn-show-historical">3. Son 30 Günlük Fon Getirisi</button>
                 <button id="btn-edit-portfolio">4. Fon Portföy Dağılımı Değiştir</button>
+                <button id="btn-show-simulation">5. Ağırlık Simülasyonu (Fiyata Göre)</button>
             </div>
         </div>
         <div class="container" id="report-container" style="display: none;">
@@ -227,6 +228,7 @@
         document.getElementById('btn-show-comparison').onclick = () => displayWeightChangeReport(name);
         document.getElementById('btn-show-historical').onclick = () => displayHistoricalReturns(name);
         document.getElementById('btn-edit-portfolio').onclick = () => showPortfolioEditor(name);
+        document.getElementById('btn-show-simulation').onclick = () => displayDynamicWeightSimulation(name);
 
         ['form-container', 'result-area', 'report-container', 'comparison-container'].forEach(id => document.getElementById(id).style.display = 'none');
         document.getElementById('options-container').style.display = 'block';
@@ -384,15 +386,15 @@
                     const adetSign = adetChange > 0 ? '+' : '';
 
                     tableHTML += `
-                            <tr>
-                                <td><b>${ticker}</b></td>
-                                <td>${weightA.toFixed(2)}%</td>
-                                <td>${weightB.toFixed(2)}%</td>
-                                <td class="${weightChangeClass}">${weightSign}${weightChange.toFixed(2)}%</td>
-                                <td>${adetA}</td>
-                                <td>${adetB}</td>
-                                <td class="${adetChangeClass}">${adetSign}${adetChange}</td>
-                            </tr>
+                                <tr>
+                                    <td><b>${ticker}</b></td>
+                                    <td>${weightA.toFixed(2)}%</td>
+                                    <td>${weightB.toFixed(2)}%</td>
+                                    <td class="${weightChangeClass}">${weightSign}${weightChange.toFixed(2)}%</td>
+                                    <td>${adetA}</td>
+                                    <td>${adetB}</td>
+                                    <td class="${adetChangeClass}">${adetSign}${adetChange}</td>
+                                </tr>
                     `;
                 });
                 
@@ -433,7 +435,6 @@
         }
     }
 
-
     async function displayHistoricalReturns(name) {
         showResultArea(true);
         document.getElementById('historical-results-container').style.display = 'block';
@@ -455,6 +456,80 @@
             document.getElementById('total-result').innerHTML = `<span class="negative">Hata: ${error.message}</span>`;
             document.getElementById('historical-results-container').style.display = 'none';
         }
+    }
+
+    async function displayDynamicWeightSimulation(name) {
+        showResultArea(true);
+        document.getElementById('result-title').textContent = `"${name}" Fonu - Dinamik Ağırlık Simülasyonu Hesaplanıyor...`;
+
+        try {
+            const portfolioResponse = await fetch(`/get_portfolio/${name}`);
+            const portfolio = await portfolioResponse.json();
+
+            if (!portfolio.stocks?.some(s => s.adet > 0) && !portfolio.funds?.some(f => f.adet > 0)) {
+                throw new Error('Bu simülasyon için portföydeki varlıklara adet girilmiş olmalıdır.');
+            }
+
+            const response = await fetch('/calculate_dynamic_weights', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(portfolio)
+            });
+            const result = await response.json();
+
+            if (!response.ok) { throw new Error(result.error || 'Bilinmeyen bir hata oluştu.'); }
+
+            showResultArea(false);
+            document.getElementById('result-title').textContent = `"${name}" Fonu - Dinamik Ağırlık Simülasyonu Sonucu`;
+            
+            const totalResultDiv = document.getElementById('total-result');
+            totalResultDiv.textContent = `${result.total_change >= 0 ? '+' : ''}${result.total_change.toFixed(2)}%`;
+            totalResultDiv.className = result.total_change >= 0 ? 'positive' : 'negative';
+
+            const stockDetails = result.details.filter(d => d.type === 'stock');
+            const fundDetails = result.details.filter(d => d.type === 'fund');
+
+            if (stockDetails.length > 0) {
+                const stockContainer = document.getElementById('stock-results-container');
+                stockContainer.innerHTML = '<h3>Hisse Senedi Detayları</h3>' + buildSimulationDetailsTable(stockDetails);
+                stockContainer.style.display = 'block';
+            }
+            if (fundDetails.length > 0) {
+                const fundContainer = document.getElementById('fund-results-container');
+                fundContainer.innerHTML = '<h3>Yatırım Fonu Detayları</h3>' + buildSimulationDetailsTable(fundDetails);
+                fundContainer.style.display = 'block';
+            }
+
+        } catch (error) {
+            showResultArea(false);
+            document.getElementById('result-title').textContent = "Simülasyon Hatası";
+            document.getElementById('total-result').innerHTML = `<span class="negative">Hata: ${error.message}</span>`;
+        }
+    }
+
+    function buildSimulationDetailsTable(details) {
+        let table = '<table class="detail-table"><thead><tr><th>Varlık</th><th>Dinamik Ağırlık</th><th>Günlük Değişim</th><th>Ağırlıklı Etki</th></tr></thead><tbody>';
+        details.forEach(item => {
+            const sign = item.weighted_impact > 0 ? '+' : '';
+            const changeClass = item.daily_change > 0 ? 'positive' : item.daily_change < 0 ? 'negative' : '';
+            const impactClass = item.weighted_impact > 0 ? 'positive' : item.weighted_impact < 0 ? 'negative' : '';
+            
+            let errorMsg = '';
+            if (item.error) {
+                errorMsg = `<br><small style="color: #c0392b;">(${item.error})</small>`;
+            }
+
+            table += `
+                <tr>
+                    <td><b>${item.ticker}</b>${errorMsg}</td>
+                    <td>${item.dynamic_weight.toFixed(2)}%</td>
+                    <td class="${changeClass}">${item.daily_change.toFixed(2)}%</td>
+                    <td class="${impactClass}">${sign}${item.weighted_impact.toFixed(4)}%</td>
+                </tr>
+            `;
+        });
+        table += '</tbody></table>';
+        return table;
     }
 
     async function showPortfolioEditor(name) {
@@ -527,22 +602,66 @@
     async function handleCalculate(event) {
         event.preventDefault();
         showResultArea(true);
-        const stocks = Array.from(document.querySelectorAll('#stocks-container .stock-row')).map(r => ({ ticker: r.children[0].value, weight: r.children[1].value }));
-        const funds = Array.from(document.querySelectorAll('#funds-container .stock-row')).map(r => ({ ticker: r.children[0].value, weight: r.children[1].value }));
+        const stocks = Array.from(document.querySelectorAll('#stocks-container .stock-row')).map(r => ({ ticker: r.children[0].value, weight: r.children[1].value, adet: r.children[2].value }));
+        const funds = Array.from(document.querySelectorAll('#funds-container .stock-row')).map(r => ({ ticker: r.children[0].value, weight: r.children[1].value, adet: r.children[2].value }));
         
         try {
             const response = await fetch('/calculate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ stocks, funds }) });
             const result = await response.json();
             if (!response.ok) throw new Error(result.error);
+            
             showResultArea(false);
-            document.getElementById('result-title').textContent = "Anlık Fon Getiri Analizi";
+            document.getElementById('result-title').textContent = "Anlık Fon Getiri Analizi (Kaydedilen Ağırlıklara Göre)";
             const totalResultDiv = document.getElementById('total-result');
             totalResultDiv.textContent = `${result.total_change >= 0 ? '+' : ''}${result.total_change.toFixed(2)}%`;
             totalResultDiv.className = result.total_change >= 0 ? 'positive' : 'negative';
+
+            const stockDetails = result.details.filter(d => d.type === 'stock');
+            const fundDetails = result.details.filter(d => d.type === 'fund');
+
+            if (stockDetails.length > 0) {
+                const stockContainer = document.getElementById('stock-results-container');
+                stockContainer.innerHTML = '<h3>Hisse Senedi Detayları</h3>' + buildOriginalDetailsTable(stockDetails, stocks);
+                stockContainer.style.display = 'block';
+            }
+            if (fundDetails.length > 0) {
+                const fundContainer = document.getElementById('fund-results-container');
+                fundContainer.innerHTML = '<h3>Yatırım Fonu Detayları</h3>' + buildOriginalDetailsTable(fundDetails, funds);
+                fundContainer.style.display = 'block';
+            }
+
         } catch (error) {
             showResultArea(false);
             document.getElementById('total-result').innerHTML = `<span class="negative">Hata: ${error.message}</span>`;
         }
+    }
+
+    function buildOriginalDetailsTable(details, original_assets) {
+        let table = '<table class="detail-table"><thead><tr><th>Varlık</th><th>Ağırlık</th><th>Günlük Değişim</th><th>Ağırlıklı Etki</th></tr></thead><tbody>';
+        details.forEach(item => {
+            const original_asset = original_assets.find(a => a.ticker.toUpperCase() === item.ticker.toUpperCase());
+            const weight = original_asset ? original_asset.weight : 'N/A';
+
+            const sign = item.weighted_impact > 0 ? '+' : '';
+            const changeClass = item.daily_change > 0 ? 'positive' : item.daily_change < 0 ? 'negative' : '';
+            const impactClass = item.weighted_impact > 0 ? 'positive' : item.weighted_impact < 0 ? 'negative' : '';
+            
+            let errorMsg = '';
+            if (item.error) {
+                errorMsg = `<br><small style="color: #c0392b;">(${item.error})</small>`;
+            }
+
+            table += `
+                <tr>
+                    <td><b>${item.ticker}</b>${errorMsg}</td>
+                    <td>${weight}%</td>
+                    <td class="${changeClass}">${item.daily_change.toFixed(2)}%</td>
+                    <td class="${impactClass}">${sign}${item.weighted_impact.toFixed(4)}%</td>
+                </tr>
+            `;
+        });
+        table += '</tbody></table>';
+        return table;
     }
 </script>
 </body>
