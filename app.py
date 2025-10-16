@@ -30,7 +30,7 @@ def login_required(f):
         # Kendi login sisteminizi kurduğunuzda bu bölümü güncellemeniz gerekecek.
         if 'user' not in session:
             # LÜTFEN BU ID'Yİ KENDİ SUPABASE projenizdeki auth.users tablosundan bir kullanıcı ID'si ile değiştirin.
-            test_user_id = "BURAYA_SUPABASE_AUTH.USERS_TABLOSUNDAN_BİR_KULLANICI_ID_YAPIŞTIRIN"
+            test_user_id = "dc3d80aa-304d-4a4e-b9b9-bc6a470d6cce"
             if "BURAYA" in test_user_id:
                 # Bu hata, ID'yi değiştirmediyseniz uygulamayı çalıştırdığınızda size hatırlatma yapacaktır.
                 raise ValueError("LÜTFEN app.py dosyasındaki test_user_id değişkenini kendi Supabase kullanıcı ID'niz ile güncelleyin.")
@@ -237,3 +237,4 @@ def recalculate_sandbox_portfolio():
 
 if __name__ == '__main__':
     app.run(debug=True)
+
