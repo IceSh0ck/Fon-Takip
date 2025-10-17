@@ -237,7 +237,6 @@ def calculate_dynamic_weights():
     total_portfolio_value = 0.0
     asset_market_values = []
     
-    # 1. Adım: Tüm varlıkların güncel piyasa değerlerini hesapla
     for stock in stocks:
         ticker, adet = stock.get('ticker').strip().upper(), int(stock.get('adet') or 0)
         if adet == 0: continue
@@ -278,7 +277,6 @@ def calculate_dynamic_weights():
     if total_portfolio_value == 0:
         return jsonify({'error': 'Portföy toplam değeri sıfır. Adetleri veya varlık kodlarını kontrol edin.'}), 400
 
-    # 2. Adım: Yeni (dinamik) ağırlıkları hesapla ve getiri analizini yap
     total_portfolio_change = 0.0
     asset_details = []
     for asset in asset_market_values:
@@ -323,7 +321,7 @@ def calculate_dynamic_weights():
     return jsonify({'total_change': total_portfolio_change, 'details': asset_details})
 
 
-# --- YENİ EKLENEN ENDPOINT (T+1 KARŞILAŞTIRMA) ---
+# --- GÜNCELLENMİŞ VE DÜZELTİLMİŞ ENDPOINT (T+1 KARŞILAŞTIRMA) ---
 @app.route('/compare_t1_data', methods=['POST'])
 def compare_t1_data():
     data = request.get_json()
@@ -337,10 +335,11 @@ def compare_t1_data():
     total_value_t_minus_2 = 0.0
     total_value_t_minus_1 = 0.0
 
+    # Hata veren tarih hesaplaması daha güvenli bir yöntemle değiştirildi
     today = datetime.now()
-    all_dates = pd.bdate_range(end=today, periods=5).to_pydatetime()
-    t_minus_1_date = all_dates[-1].date()
-    t_minus_2_date = all_dates[-2].date()
+    date_index = pd.bdate_range(end=today, periods=5) 
+    t_minus_1_date = date_index[-1].date()
+    t_minus_2_date = date_index[-2].date()
 
     for stock in stocks:
         ticker, adet = stock.get('ticker').strip().upper(), int(stock.get('adet') or 0)
@@ -348,8 +347,12 @@ def compare_t1_data():
         
         yf_ticker = ticker + '.IS' if not ticker.endswith('.IS') else ticker
         try:
+            # yfinance'in "end" parametresi o günü dahil etmediği için +1 gün ekliyoruz
             hist = yf.download(yf_ticker, start=t_minus_2_date - timedelta(days=3), end=t_minus_1_date + timedelta(days=1), progress=False)
-            if len(hist) < 2: raise ValueError("Yeterli tarihsel veri yok")
+            
+            # Eksik veri kontrolü eklendi
+            if len(hist) < 2: 
+                raise ValueError("Yeterli tarihsel veri bulunamadı.")
 
             price_t_minus_1 = hist['Close'].iloc[-1]
             price_t_minus_2 = hist['Close'].iloc[-2]
@@ -396,7 +399,7 @@ def compare_t1_data():
             comparison_details.append({'ticker': fund_code, 'type': 'fund', 'error': str(e)})
 
     total_change_value = total_value_t_minus_1 - total_value_t_minus_2
-    total_change_percent = (total_change_value / total_value_t_minus_2 * 100) if total_value_t_minus_2 else 0
+    total_change_percent = (total_change_value / total_value_t_minus_2 * 100) if total_value_t_minus_2 != 0 else 0
 
     return jsonify({
         'details': comparison_details,
@@ -407,6 +410,7 @@ def compare_t1_data():
         'date_t_minus_1': t_minus_1_date.strftime('%d.%m.%Y'),
         'date_t_minus_2': t_minus_2_date.strftime('%d.%m.%Y')
     })
+
 
 if __name__ == '__main__':
     app.run(debug=True)
