@@ -6,7 +6,6 @@ import requests
 from datetime import date, timedelta, datetime
 import pandas as pd
 from supabase import create_client, Client
-import traceback
 
 app = Flask(__name__)
 
@@ -47,7 +46,7 @@ def save_portfolios(portfolios_dict):
         print(f"Supabase'e veri kaydedilirken hata: {e}")
 
 
-# --- API ENDPOINT'LERİ (Değişiklik yok) ---
+# --- API ENDPOINT'LERİ ---
 
 @app.route('/')
 def index():
@@ -148,7 +147,7 @@ def calculate_historical(portfolio_name):
     if stocks_in_portfolio:
         stock_tickers_is = [s['ticker'].strip().upper() + '.IS' for s in stocks_in_portfolio]
         try:
-            stock_data = yf.download(stock_tickers_is, start=start_date, end=end_date, progress=False, auto_adjust=True)
+            stock_data = yf.download(stock_tickers_is, start=start_date, end=end_date, progress=False)
             if not stock_data.empty:
                 close_prices = stock_data['Close'] if len(stock_tickers_is) > 1 else stock_data[['Close']]
                 asset_prices_df = pd.concat([asset_prices_df, close_prices], axis=1)
@@ -195,6 +194,7 @@ def get_portfolio_history(portfolio_name):
 
     return jsonify(portfolio_data)
 
+
 @app.route('/revert_portfolio/<portfolio_name>', methods=['POST'])
 def revert_portfolio(portfolio_name):
     portfolios = load_portfolios()
@@ -226,6 +226,7 @@ def delete_portfolio():
     else:
         return jsonify({'error': 'Silinecek portföy bulunamadı.'}), 404
 
+# YENİ EKLENEN ENDPOINT
 @app.route('/calculate_dynamic_weights', methods=['POST'])
 def calculate_dynamic_weights():
     data = request.get_json()
@@ -237,6 +238,7 @@ def calculate_dynamic_weights():
     total_portfolio_value = 0.0
     asset_market_values = []
     
+    # 1. Adım: Tüm varlıkların güncel piyasa değerlerini hesapla
     for stock in stocks:
         ticker, adet = stock.get('ticker').strip().upper(), int(stock.get('adet') or 0)
         if adet == 0: continue
@@ -277,6 +279,7 @@ def calculate_dynamic_weights():
     if total_portfolio_value == 0:
         return jsonify({'error': 'Portföy toplam değeri sıfır. Adetleri veya varlık kodlarını kontrol edin.'}), 400
 
+    # 2. Adım: Yeni (dinamik) ağırlıkları hesapla ve getiri analizini yap
     total_portfolio_change = 0.0
     asset_details = []
     for asset in asset_market_values:
@@ -308,97 +311,18 @@ def calculate_dynamic_weights():
         weighted_impact = (dynamic_weight / 100) * daily_change
         total_portfolio_change += weighted_impact
         
-        detail = { 'type': asset['type'], 'ticker': asset['ticker'], 'dynamic_weight': dynamic_weight, 'daily_change': daily_change, 'weighted_impact': weighted_impact }
+        detail = {
+            'type': asset['type'],
+            'ticker': asset['ticker'],
+            'dynamic_weight': dynamic_weight,
+            'daily_change': daily_change,
+            'weighted_impact': weighted_impact
+        }
         if date_range: detail['date_range'] = date_range
         asset_details.append(detail)
         
     return jsonify({'total_change': total_portfolio_change, 'details': asset_details})
 
-
-# --- ### SON GÜNCELLEME İLE DÜZELTİLMİŞ NİHAİ ENDPOINT ### ---
-@app.route('/compare_t1_data', methods=['POST'])
-def compare_t1_data():
-    try:
-        data = request.get_json()
-        stocks = data.get('stocks', [])
-        funds = data.get('funds', [])
-        
-        if not any(s.get('adet') for s in stocks) and not any(f.get('adet') for f in funds):
-            return jsonify({'error': 'Bu karşılaştırma için en az bir varlığa adet girilmiş olmalıdır.'}), 400
-
-        comparison_details = []
-        total_value_t_minus_2 = 0.0
-        total_value_t_minus_1 = 0.0
-
-        today = datetime.now()
-        date_index = pd.bdate_range(end=today, periods=5) 
-        t_minus_1_date = date_index[-1].date()
-        t_minus_2_date = date_index[-2].date()
-
-        for stock in stocks:
-            ticker, adet = stock.get('ticker').strip().upper(), int(stock.get('adet') or 0)
-            if adet == 0: continue
-            
-            yf_ticker = ticker + '.IS' if not ticker.endswith('.IS') else ticker
-            try:
-                # auto_adjust=True parametresi eklendi (FutureWarning için)
-                hist = yf.download(yf_ticker, start=t_minus_2_date - timedelta(days=3), end=t_minus_1_date + timedelta(days=1), progress=False, auto_adjust=True)
-                
-                if len(hist) < 2: 
-                    raise ValueError(f"'{ticker}' için yeterli tarihsel veri bulunamadı.")
-
-                # ### ANA DÜZELTME BURADA ###
-                # Gelen veriyi doğrudan float() ile saf sayıya çeviriyoruz.
-                price_t_minus_1 = float(hist['Close'].iloc[-1])
-                price_t_minus_2 = float(hist['Close'].iloc[-2])
-                
-                value_1 = price_t_minus_1 * adet
-                value_2 = price_t_minus_2 * adet
-                
-                total_value_t_minus_1 += value_1
-                total_value_t_minus_2 += value_2
-                comparison_details.append({ 'ticker': ticker, 'type': 'stock', 'value_t_minus_1': value_1, 'value_t_minus_2': value_2, 'price_t_minus_1': price_t_minus_1, 'price_t_minus_2': price_t_minus_2 })
-            except Exception as e:
-                print(f"Hisse Senedi Hatası ({ticker}): {e}")
-                comparison_details.append({'ticker': ticker, 'type': 'stock', 'error': str(e)})
-
-        sdt_str = (t_minus_2_date - timedelta(days=5)).strftime('%d-%m-%Y')
-        fdt_str = t_minus_1_date.strftime('%d-%m-%Y')
-        for fund in funds:
-            fund_code, adet = fund.get('ticker').strip().upper(), int(fund.get('adet') or 0)
-            if adet == 0: continue
-            try:
-                res = requests.get(f"https://www.tefas.gov.tr/api/DB/BindHistoryPrice?sdt={sdt_str}&fdt={fdt_str}&kod={fund_code}", timeout=10)
-                res.raise_for_status()
-                fund_data = [i for i in res.json() if i.get('BirimPayDegeri') is not None]
-                
-                if len(fund_data) < 2: 
-                    raise ValueError(f"'{fund_code}' için yeterli TEFAS verisi bulunamadı.")
-
-                # Buradaki veri zaten float, yine de garantiye alalım.
-                price_t_minus_1 = float(fund_data[-1]['BirimPayDegeri'])
-                price_t_minus_2 = float(fund_data[-2]['BirimPayDegeri'])
-                
-                value_1 = price_t_minus_1 * adet
-                value_2 = price_t_minus_2 * adet
-                
-                total_value_t_minus_1 += value_1
-                total_value_t_minus_2 += value_2
-                comparison_details.append({ 'ticker': fund_code, 'type': 'fund', 'value_t_minus_1': value_1, 'value_t_minus_2': value_2, 'price_t_minus_1': price_t_minus_1, 'price_t_minus_2': price_t_minus_2 })
-            except Exception as e:
-                print(f"Yatırım Fonu Hatası ({fund_code}): {e}")
-                comparison_details.append({'ticker': fund_code, 'type': 'fund', 'error': str(e)})
-
-        total_change_value = total_value_t_minus_1 - total_value_t_minus_2
-        total_change_percent = (total_change_value / total_value_t_minus_2 * 100) if total_value_t_minus_2 != 0 else 0
-
-        return jsonify({ 'details': comparison_details, 'total_value_t_minus_1': total_value_t_minus_1, 'total_value_t_minus_2': total_value_t_minus_2, 'total_change_value': total_change_value, 'total_change_percent': total_change_percent, 'date_t_minus_1': t_minus_1_date.strftime('%d.%m.%Y'), 'date_t_minus_2': t_minus_2_date.strftime('%d.%m.%Y') })
-    
-    except Exception as e:
-        print("\n--- BEKLENMEDİK SUNUCU HATASI ---")
-        traceback.print_exc()
-        print("---------------------------------\n")
-        return jsonify({ 'error': 'Sunucu tarafında genel bir hata oluştu.', 'details': str(e) }), 500
 
 if __name__ == '__main__':
     app.run(debug=True)
