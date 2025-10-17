@@ -226,7 +226,6 @@ def delete_portfolio():
     else:
         return jsonify({'error': 'Silinecek portföy bulunamadı.'}), 404
 
-# YENİ EKLENEN ENDPOINT
 @app.route('/calculate_dynamic_weights', methods=['POST'])
 def calculate_dynamic_weights():
     data = request.get_json()
@@ -323,6 +322,91 @@ def calculate_dynamic_weights():
         
     return jsonify({'total_change': total_portfolio_change, 'details': asset_details})
 
+
+# --- YENİ EKLENEN ENDPOINT (T+1 KARŞILAŞTIRMA) ---
+@app.route('/compare_t1_data', methods=['POST'])
+def compare_t1_data():
+    data = request.get_json()
+    stocks = data.get('stocks', [])
+    funds = data.get('funds', [])
+    
+    if not any(s.get('adet') for s in stocks) and not any(f.get('adet') for f in funds):
+        return jsonify({'error': 'Bu karşılaştırma için en az bir varlığa adet girilmiş olmalıdır.'}), 400
+
+    comparison_details = []
+    total_value_t_minus_2 = 0.0
+    total_value_t_minus_1 = 0.0
+
+    today = datetime.now()
+    all_dates = pd.bdate_range(end=today, periods=5).to_pydatetime()
+    t_minus_1_date = all_dates[-1].date()
+    t_minus_2_date = all_dates[-2].date()
+
+    for stock in stocks:
+        ticker, adet = stock.get('ticker').strip().upper(), int(stock.get('adet') or 0)
+        if adet == 0: continue
+        
+        yf_ticker = ticker + '.IS' if not ticker.endswith('.IS') else ticker
+        try:
+            hist = yf.download(yf_ticker, start=t_minus_2_date - timedelta(days=3), end=t_minus_1_date + timedelta(days=1), progress=False)
+            if len(hist) < 2: raise ValueError("Yeterli tarihsel veri yok")
+
+            price_t_minus_1 = hist['Close'].iloc[-1]
+            price_t_minus_2 = hist['Close'].iloc[-2]
+            
+            value_1 = price_t_minus_1 * adet
+            value_2 = price_t_minus_2 * adet
+            
+            total_value_t_minus_1 += value_1
+            total_value_t_minus_2 += value_2
+            comparison_details.append({
+                'ticker': ticker, 'type': 'stock',
+                'value_t_minus_1': value_1, 'value_t_minus_2': value_2,
+                'price_t_minus_1': price_t_minus_1, 'price_t_minus_2': price_t_minus_2
+            })
+        except Exception as e:
+            print(f"Hisse hatası ({ticker}): {e}")
+            comparison_details.append({'ticker': ticker, 'type': 'stock', 'error': str(e)})
+
+    sdt_str = (t_minus_2_date - timedelta(days=5)).strftime('%d-%m-%Y')
+    fdt_str = t_minus_1_date.strftime('%d-%m-%Y')
+    for fund in funds:
+        fund_code, adet = fund.get('ticker').strip().upper(), int(fund.get('adet') or 0)
+        if adet == 0: continue
+        try:
+            res = requests.get(f"https://www.tefas.gov.tr/api/DB/BindHistoryPrice?sdt={sdt_str}&fdt={fdt_str}&kod={fund_code}", timeout=10)
+            fund_data = [i for i in res.json() if i.get('BirimPayDegeri') is not None]
+            if len(fund_data) < 2: raise ValueError("Yeterli TEFAS verisi yok")
+
+            price_t_minus_1 = fund_data[-1]['BirimPayDegeri']
+            price_t_minus_2 = fund_data[-2]['BirimPayDegeri']
+            
+            value_1 = price_t_minus_1 * adet
+            value_2 = price_t_minus_2 * adet
+            
+            total_value_t_minus_1 += value_1
+            total_value_t_minus_2 += value_2
+            comparison_details.append({
+                'ticker': fund_code, 'type': 'fund',
+                'value_t_minus_1': value_1, 'value_t_minus_2': value_2,
+                'price_t_minus_1': price_t_minus_1, 'price_t_minus_2': price_t_minus_2
+            })
+        except Exception as e:
+            print(f"Fon hatası ({fund_code}): {e}")
+            comparison_details.append({'ticker': fund_code, 'type': 'fund', 'error': str(e)})
+
+    total_change_value = total_value_t_minus_1 - total_value_t_minus_2
+    total_change_percent = (total_change_value / total_value_t_minus_2 * 100) if total_value_t_minus_2 else 0
+
+    return jsonify({
+        'details': comparison_details,
+        'total_value_t_minus_1': total_value_t_minus_1,
+        'total_value_t_minus_2': total_value_t_minus_2,
+        'total_change_value': total_change_value,
+        'total_change_percent': total_change_percent,
+        'date_t_minus_1': t_minus_1_date.strftime('%d.%m.%Y'),
+        'date_t_minus_2': t_minus_2_date.strftime('%d.%m.%Y')
+    })
 
 if __name__ == '__main__':
     app.run(debug=True)
