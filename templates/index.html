@@ -72,6 +72,7 @@
                 <button id="btn-show-historical">3. Son 30 Günlük Fon Getirisi</button>
                 <button id="btn-edit-portfolio">4. Fon Portföy Dağılımı Değiştir</button>
                 <button id="btn-show-simulation">5. Ağırlık Simülasyonu (Fiyata Göre)</button>
+                <button id="btn-show-time-comparison">6. Veri Karşılaştırma (T+1)</button>
             </div>
         </div>
         <div class="container" id="report-container" style="display: none;">
@@ -229,6 +230,8 @@
         document.getElementById('btn-show-historical').onclick = () => displayHistoricalReturns(name);
         document.getElementById('btn-edit-portfolio').onclick = () => showPortfolioEditor(name);
         document.getElementById('btn-show-simulation').onclick = () => displayDynamicWeightSimulation(name);
+        // YENİ EKLENEN KOD - Butonun click olayını atama
+        document.getElementById('btn-show-time-comparison').onclick = () => displayTimeComparison(name);
 
         ['form-container', 'result-area', 'report-container', 'comparison-container'].forEach(id => document.getElementById(id).style.display = 'none');
         document.getElementById('options-container').style.display = 'block';
@@ -386,15 +389,15 @@
                     const adetSign = adetChange > 0 ? '+' : '';
 
                     tableHTML += `
-                                <tr>
-                                    <td><b>${ticker}</b></td>
-                                    <td>${weightA.toFixed(2)}%</td>
-                                    <td>${weightB.toFixed(2)}%</td>
-                                    <td class="${weightChangeClass}">${weightSign}${weightChange.toFixed(2)}%</td>
-                                    <td>${adetA}</td>
-                                    <td>${adetB}</td>
-                                    <td class="${adetChangeClass}">${adetSign}${adetChange}</td>
-                                </tr>
+                            <tr>
+                                <td><b>${ticker}</b></td>
+                                <td>${weightA.toFixed(2)}%</td>
+                                <td>${weightB.toFixed(2)}%</td>
+                                <td class="${weightChangeClass}">${weightSign}${weightChange.toFixed(2)}%</td>
+                                <td>${adetA}</td>
+                                <td>${adetB}</td>
+                                <td class="${adetChangeClass}">${adetSign}${adetChange}</td>
+                            </tr>
                     `;
                 });
                 
@@ -657,6 +660,87 @@
                     <td>${weight}%</td>
                     <td class="${changeClass}">${item.daily_change.toFixed(2)}%</td>
                     <td class="${impactClass}">${sign}${item.weighted_impact.toFixed(4)}%</td>
+                </tr>
+            `;
+        });
+        table += '</tbody></table>';
+        return table;
+    }
+
+    // --- YENİ EKLENEN KOD BLOKLARI (T+1 Karşılaştırma için) ---
+
+    async function displayTimeComparison(name) {
+        showResultArea(true);
+        document.getElementById('result-title').textContent = `"${name}" Fonu - T+1 Veri Karşılaştırması Hesaplanıyor...`;
+
+        try {
+            const portfolioResponse = await fetch(`/get_portfolio/${name}`);
+            const portfolio = await portfolioResponse.json();
+
+            const response = await fetch('/compare_t1_data', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(portfolio)
+            });
+            const result = await response.json();
+            if (!response.ok) { throw new Error(result.error || 'Bilinmeyen bir hata oluştu.'); }
+
+            showResultArea(false);
+            const changeValue = result.total_change_value;
+            const changePercent = result.total_change_percent;
+            const valueSign = changeValue >= 0 ? '+' : '';
+
+            document.getElementById('result-title').textContent = `"${name}" Fonu | Günlük Değer Değişimi (${result.date_t_minus_2} → ${result.date_t_minus_1})`;
+            
+            const totalResultDiv = document.getElementById('total-result');
+            totalResultDiv.innerHTML = `
+                <span class="${changeValue >= 0 ? 'positive' : 'negative'}">${valueSign}${changeValue.toLocaleString('tr-TR', { style: 'currency', currency: 'TRY' })}</span>
+                <span class="title-meta">(${valueSign}${changePercent.toFixed(2)}%)</span>
+            `;
+
+            const stockDetails = result.details.filter(d => d.type === 'stock');
+            const fundDetails = result.details.filter(d => d.type === 'fund');
+
+            if (stockDetails.length > 0) {
+                const stockContainer = document.getElementById('stock-results-container');
+                stockContainer.innerHTML = '<h3>Hisse Senedi Detayları</h3>' + buildTimeComparisonTable(stockDetails, result.date_t_minus_2, result.date_t_minus_1);
+                stockContainer.style.display = 'block';
+            }
+            if (fundDetails.length > 0) {
+                const fundContainer = document.getElementById('fund-results-container');
+                fundContainer.innerHTML = '<h3>Yatırım Fonu Detayları</h3>' + buildTimeComparisonTable(fundDetails, result.date_t_minus_2, result.date_t_minus_1);
+                fundContainer.style.display = 'block';
+            }
+
+        } catch (error) {
+            showResultArea(false);
+            document.getElementById('result-title').textContent = "Karşılaştırma Hatası";
+            document.getElementById('total-result').innerHTML = `<span class="negative">Hata: ${error.message}</span>`;
+        }
+    }
+
+    function buildTimeComparisonTable(details, date2, date1) {
+        let table = `<table class="detail-table"><thead><tr>
+                        <th>Varlık</th>
+                        <th>Değer (${date2})</th>
+                        <th>Değer (${date1})</th>
+                        <th>Değişim (TL)</th>
+                     </tr></thead><tbody>`;
+        details.forEach(item => {
+            if(item.error) {
+                 table += `<tr><td><b>${item.ticker}</b></td><td colspan="3" style="text-align:center; color: #c0392b;">Hata: Veri alınamadı</td></tr>`;
+                 return;
+            }
+            const valueChange = item.value_t_minus_1 - item.value_t_minus_2;
+            const changeClass = valueChange > 0 ? 'positive' : valueChange < 0 ? 'negative' : '';
+            const sign = valueChange > 0 ? '+' : '';
+            
+            table += `
+                <tr>
+                    <td><b>${item.ticker}</b></td>
+                    <td>${item.value_t_minus_2.toLocaleString('tr-TR', { style: 'currency', currency: 'TRY' })}</td>
+                    <td>${item.value_t_minus_1.toLocaleString('tr-TR', { style: 'currency', currency: 'TRY' })}</td>
+                    <td class="${changeClass}">${sign}${valueChange.toLocaleString('tr-TR', { style: 'currency', currency: 'TRY' })}</td>
                 </tr>
             `;
         });
