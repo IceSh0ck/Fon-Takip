@@ -42,12 +42,7 @@
         .comparison-selector { display: flex; flex-wrap: wrap; gap: 20px; align-items: center; justify-content: center; margin-bottom: 20px; padding: 15px; background-color: #ecf0f1; border-radius: 6px;}
         .comparison-selector div { flex: 1; min-width: 250px; }
         .comparison-selector label { font-weight: bold; display: block; margin-bottom: 5px; }
-
-        /* YENİ BUTON STİLİ */
-        #btn-switch-view {
-            background-color: #f39c12 !important; /* Turuncu renk */
-            margin-top: 5px;
-        }
+        #btn-switch-view { background-color: #f39c12 !important; margin-top: 5px; }
         #btn-switch-view:hover { background-color: #e67e22 !important; }
     </style>
 </head>
@@ -57,7 +52,6 @@
         <h2 id="sidebar-title">Kaydedilmiş Fonlar</h2>
         <ul id="portfolio-list" class="sidebar-list"></ul>
         <ul id="composition-list" class="sidebar-list" style="display: none;"></ul>
-
         <div class="sidebar-actions">
             <button id="btn-new-item">Yeni Fon Ekle</button>
             <button id="btn-delete-item">Fonu Sil</button>
@@ -129,7 +123,6 @@
         document.querySelectorAll('.back-button').forEach(btn => btn.onclick = handleBackButtonClick);
     });
 
-    // --- VIEW / UI MANAGEMENT ---
     function switchView() {
         currentView = (currentView === 'portfolio') ? 'composition' : 'portfolio';
         currentSelectedItemName = null;
@@ -153,7 +146,6 @@
         });
     }
 
-    // --- DATA LOADING ---
     async function loadPortfolios() {
         const response = await fetch('/get_portfolios');
         const names = await response.json();
@@ -161,8 +153,7 @@
         listEl.innerHTML = '';
         names.forEach(name => {
             const li = document.createElement('li');
-            li.textContent = name;
-            li.dataset.name = name;
+            li.textContent = name; li.dataset.name = name;
             li.onclick = (e) => showOptions(name, 'portfolio', e.currentTarget);
             listEl.appendChild(li);
         });
@@ -175,14 +166,12 @@
         listEl.innerHTML = '';
         names.forEach(name => {
             const li = document.createElement('li');
-            li.textContent = name;
-            li.dataset.name = name;
+            li.textContent = name; li.dataset.name = name;
             li.onclick = (e) => showOptions(name, 'composition', e.currentTarget);
             listEl.appendChild(li);
         });
     }
     
-    // --- FORM & OPTIONS LOGIC ---
     function showFormForNew(type) {
         currentSelectedItemName = null;
         document.querySelectorAll('.sidebar-list li').forEach(li => li.classList.remove('active'));
@@ -228,11 +217,9 @@
         const data = await response.json();
         document.getElementById('form-name-label').textContent = type === 'portfolio' ? 'Fon Adı' : 'Fon Kodu';
         document.getElementById('portfolio-name').value = data.name;
-        const stocksContainer = document.getElementById('stocks-container');
-        stocksContainer.innerHTML = '';
+        document.getElementById('stocks-container').innerHTML = '';
         (data.stocks || []).forEach(s => addAsset('stock', s.ticker, s.weight, s.adet));
-        const fundsContainer = document.getElementById('funds-container');
-        fundsContainer.innerHTML = '';
+        document.getElementById('funds-container').innerHTML = '';
         (data.funds || []).forEach(f => addAsset('fund', f.ticker, f.weight, f.adet));
         document.querySelector('#form-container .back-button').style.display = 'block';
         showScreen('form-container');
@@ -242,24 +229,16 @@
         const container = document.getElementById(type === 'stock' ? 'stocks-container' : 'funds-container');
         const newRow = document.createElement('div');
         newRow.className = 'stock-row';
-        newRow.innerHTML = `
-            <input type="text" placeholder="${type === 'stock' ? 'Hisse Kodu' : 'Fon Kodu'}" value="${ticker}" required>
-            <input type="number" placeholder="Ağırlık (%)" value="${weight}" min="0.01" step="0.01" required>
-            <input type="number" placeholder="Adet (Ops.)" value="${adet}" min="0" step="1">
-            <button type="button" class="btn-remove" onclick="this.parentElement.remove()">X</button>
-        `;
+        newRow.innerHTML = `<input type="text" placeholder="${type === 'stock' ? 'Hisse Kodu' : 'Fon Kodu'}" value="${ticker}" required><input type="number" placeholder="Ağırlık (%)" value="${weight}" min="0.01" step="0.01" required><input type="number" placeholder="Adet (Ops.)" value="${adet}" min="0" step="1"><button type="button" class="btn-remove" onclick="this.parentElement.remove()">X</button>`;
         container.appendChild(newRow);
     }
 
-    // --- EVENT HANDLERS & API CALLS ---
     function handleBackButtonClick(e) {
         e.preventDefault();
         if (currentSelectedItemName) {
             const activeLi = document.querySelector(`.sidebar-list li[data-name="${currentSelectedItemName}"]`);
             showOptions(currentSelectedItemName, currentView, activeLi);
-        } else {
-            showFormForNew(currentView);
-        }
+        } else { showFormForNew(currentView); }
     }
 
     async function handleSave() {
@@ -271,34 +250,20 @@
         if (Math.abs(totalWeight - 100) > 0.01) {
             if (!confirm(`Toplam ağırlık ${totalWeight.toFixed(2)}%. 100% değil. Yine de kaydetmek istiyor musunuz?`)) return;
         }
-        const response = await fetch('/save_item', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ type: currentView, name, stocks, funds })
-        });
+        const response = await fetch('/save_item', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: currentView, name, stocks, funds }) });
         const result = await response.json();
         alert(response.ok ? result.success : 'Hata: ' + result.error);
-        if (response.ok) {
-            currentView === 'portfolio' ? loadPortfolios() : loadCompositions();
-            showFormForNew(currentView);
-        }
+        if (response.ok) { currentView === 'portfolio' ? loadPortfolios() : loadCompositions(); showFormForNew(currentView); }
     }
     
     async function handleDeleteClick() {
         if (!currentSelectedItemName) { alert('Silmek için listeden bir öğe seçin.'); return; }
         const itemTypeText = currentView === 'portfolio' ? 'fonunu' : 'içeriğini';
         if (confirm(`"${currentSelectedItemName}" ${itemTypeText} silmek istediğinizden emin misiniz?`)) {
-             const response = await fetch('/delete_item', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ type: currentView, name: currentSelectedItemName })
-            });
+             const response = await fetch('/delete_item', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: currentView, name: currentSelectedItemName }) });
             const result = await response.json();
             alert(response.ok ? result.success : 'Hata: ' + result.error);
-            if(response.ok) {
-                currentView === 'portfolio' ? loadPortfolios() : loadCompositions();
-                showFormForNew(currentView);
-            }
+            if(response.ok) { currentView === 'portfolio' ? loadPortfolios() : loadCompositions(); showFormForNew(currentView); }
         }
     }
 
@@ -317,37 +282,25 @@
             const totalResultDiv = document.getElementById('total-result');
             totalResultDiv.textContent = `${result.total_change >= 0 ? '+' : ''}${result.total_change.toFixed(2)}%`;
             totalResultDiv.className = result.total_change >= 0 ? 'positive' : 'negative';
-            // Detay tabloları buraya eklenebilir
-        } catch (error) {
-            showResultArea(false);
-            document.getElementById('total-result').innerHTML = `<span class="negative">Hata: ${error.message}</span>`;
-        }
+        } catch (error) { showResultArea(false); document.getElementById('total-result').innerHTML = `<span class="negative">Hata: ${error.message}</span>`; }
     }
 
     async function fetchAndDisplayLiveReturn(name, type) {
         const displayDiv = document.getElementById('live-return-display');
-        displayDiv.textContent = 'Hesaplanıyor...';
-        displayDiv.className = '';
+        displayDiv.textContent = 'Hesaplanıyor...'; displayDiv.className = '';
         const dataEndpoint = type === 'portfolio' ? `/get_portfolio/${name}` : `/get_composition/${name}`;
         const portfolioResponse = await fetch(dataEndpoint);
         if(!portfolioResponse.ok) { displayDiv.textContent = `Veri bulunamadı.`; displayDiv.className = 'negative'; return; }
         const portfolio = await portfolioResponse.json();
-        const calculateResponse = await fetch('/calculate', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ stocks: portfolio.stocks, funds: portfolio.funds })
-        });
+        const calculateResponse = await fetch('/calculate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ stocks: portfolio.stocks, funds: portfolio.funds }) });
         const result = await calculateResponse.json();
         if (calculateResponse.ok) {
             const value = result.total_change;
             displayDiv.textContent = `Anlık Getiri: ${value >= 0 ? '+' : ''}${value.toFixed(2)}%`;
             displayDiv.className = value >= 0 ? 'positive' : 'negative';
-        } else {
-            displayDiv.textContent = `Hata: ${result.error || 'Getiri hesaplanamadı.'}`;
-            displayDiv.className = 'negative';
-        }
+        } else { displayDiv.textContent = `Hata: ${result.error || 'Getiri hesaplanamadı.'}`; displayDiv.className = 'negative'; }
     }
 
-    // --- RAPORLAMA FONKSİYONLARI ---
     async function displayPieChartReport(name, type) {
         showScreen('report-container');
         document.getElementById('report-title').textContent = `"${name}" Fon Dağılımı`;
@@ -355,27 +308,109 @@
         const response = await fetch(endpoint);
         const portfolio = await response.json();
         const assets = (portfolio.stocks || []).concat(portfolio.funds || []);
-        const labels = assets.map(a => a.ticker);
-        const data = assets.map(a => parseFloat(a.weight));
+        const labels = assets.map(a => a.ticker); const data = assets.map(a => parseFloat(a.weight));
         const ctx = document.getElementById('portfolioPieChart').getContext('2d');
         if(portfolioChart) { portfolioChart.destroy(); }
         portfolioChart = new Chart(ctx, { type: 'pie', data: { labels, datasets: [{ data, backgroundColor: labels.map((_, i) => `hsl(${i * 360 / labels.length}, 70%, 50%)`)}] }, options: { responsive: true, plugins: { legend: { position: 'top' }, tooltip: { callbacks: { label: (c) => `${c.label}: ${c.raw.toFixed(2)}%` } } } } });
     }
     
-    async function displayWeightChangeReport(name, type) { /* Bu fonksiyon önceki koddan kopyalanıp uyarlanabilir */ }
-    async function revertItem(name, type) { /* Bu fonksiyon önceki koddan kopyalanıp uyarlanabilir */ }
-    async function displayHistoricalReturns(name, type) { /* Bu fonksiyon önceki koddan kopyalanıp uyarlanabilir */ }
-    async function displayDynamicWeightSimulation(name, type) { /* Bu fonksiyon önceki koddan kopyalanıp uyarlanabilir */ }
+    async function displayWeightChangeReport(name, type) {
+        showScreen('comparison-container');
+        const tableContainer = document.getElementById('comparison-table-container');
+        const title = document.getElementById('comparison-title');
+        title.textContent = `"${name}" Geçmişi Yükleniyor...`;
+        tableContainer.innerHTML = '<div class="loader"></div>';
+        try {
+            const response = await fetch(`/get_item_history/${type}/${name}`);
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.error);
+            title.textContent = `"${name}" Değişim Raporu`;
+            const allVersions = [data.current, ...data.history];
+            if (allVersions.length < 2) { tableContainer.innerHTML = `<p style="text-align:center;">Karşılaştırma için en az bir geçmiş kayıt bulunmalıdır.</p>`; return; }
+            let selectorHTML = `<div class="comparison-selector"><div><label for="select-version-A">Karşılaştırılacak:</label><select id="select-version-A"></select></div><div><label for="select-version-B">Temel Alınacak:</label><select id="select-version-B"></select></div></div><div id="dynamic-comparison-table"></div>`;
+            tableContainer.innerHTML = selectorHTML;
+            const selectA = document.getElementById('select-version-A');
+            const selectB = document.getElementById('select-version-B');
+            allVersions.forEach((v, i) => { const ts = i === 0 ? "Güncel Versiyon" : v.display_timestamp; selectA.options[i] = new Option(ts, i); selectB.options[i] = new Option(ts, i); });
+            selectA.value = 0; selectB.value = 1;
+            const renderTable = () => {
+                const vA = allVersions[selectA.value], vB = allVersions[selectB.value];
+                const assetsA = { ...((vA.stocks || []).reduce((o, i) => (o[i.ticker.toUpperCase()] = i, o), {})), ...((vA.funds || []).reduce((o, i) => (o[i.ticker.toUpperCase()] = i, o), {})) };
+                const assetsB = { ...((vB.stocks || []).reduce((o, i) => (o[i.ticker.toUpperCase()] = i, o), {})), ...((vB.funds || []).reduce((o, i) => (o[i.ticker.toUpperCase()] = i, o), {})) };
+                const allTickers = [...new Set([...Object.keys(assetsA), ...Object.keys(assetsB)])].sort();
+                const dateA = selectA.value == 0 ? "Güncel" : vA.display_timestamp, dateB = selectB.value == 0 ? "Güncel" : vB.display_timestamp;
+                let table = `<table class="detail-table"><thead><tr><th rowspan="2">Varlık</th><th colspan="3">Ağırlık</th><th colspan="3">Adet</th></tr><tr><th>${dateA}</th><th>${dateB}</th><th>Fark</th><th>${dateA}</th><th>${dateB}</th><th>Fark</th></tr></thead><tbody>`;
+                allTickers.forEach(ticker => {
+                    const assetA = assetsA[ticker] || {w:0, a:0}, assetB = assetsB[ticker] || {w:0, a:0};
+                    const wA = parseFloat(assetA.weight||0), wB = parseFloat(assetB.weight||0), wCh = wA-wB;
+                    const aA = parseInt(assetA.adet||0), aB = parseInt(assetB.adet||0), aCh = aA-aB;
+                    table += `<tr><td><b>${ticker}</b></td><td>${wA.toFixed(2)}%</td><td>${wB.toFixed(2)}%</td><td class="${wCh>0?'pos':wCh<0?'neg':''}">${wCh.toFixed(2)}%</td><td>${aA}</td><td>${aB}</td><td class="${aCh>0?'pos':aCh<0?'neg':''}">${aCh}</td></tr>`;
+                });
+                table += `</tbody></table><button type="button" class="btn-revert" onclick="revertItem('${name}', '${type}')">En Son Değişikliği Geri Al</button>`;
+                document.getElementById('dynamic-comparison-table').innerHTML = table;
+            };
+            selectA.onchange = renderTable; selectB.onchange = renderTable; renderTable();
+        } catch (error) { title.textContent = 'Hata'; tableContainer.innerHTML = `<p class="negative">Hata: ${error.message}</p>`; }
+    }
 
-    // --- YARDIMCI FONKSİYONLAR ---
+    async function revertItem(name, type) {
+        if (confirm(`"${name}" için son değişikliği geri almak istediğinizden emin misiniz?`)) {
+            const response = await fetch(`/revert_item/${type}/${name}`, { method: 'POST' });
+            const result = await response.json();
+            alert(response.ok ? result.success : 'Hata: ' + result.error);
+            if (response.ok) { displayWeightChangeReport(name, type); }
+        }
+    }
+
+    async function displayHistoricalReturns(name, type) {
+        showResultArea(true);
+        document.getElementById('historical-results-container').style.display = 'block';
+        document.getElementById('result-title').textContent = `"${name}" - Son 30 Günlük Getiri`;
+        try {
+            const response = await fetch(`/calculate_historical/${type}/${name}`);
+            const data = await response.json();
+            if (!response.ok) { throw new Error(data.error); }
+            showResultArea(false); document.getElementById('historical-results-container').style.display = 'block';
+            const ctx = document.getElementById('historicalLineChart').getContext('2d');
+            if (historicalChart) { historicalChart.destroy(); }
+            historicalChart = new Chart(ctx, { type: 'line', data: { labels: data.dates, datasets: [{ label: 'Günlük Getiri (%)', data: data.returns, borderColor: 'rgb(54, 162, 235)', tension: 0.1, pointBackgroundColor: data.returns.map(v => v >= 0 ? '#27ae60' : '#c0392b') }] }, options: { scales: { y: { title: { display: true, text: 'Günlük Getiri (%)' } } } } });
+        } catch (error) { showResultArea(false); document.getElementById('total-result').innerHTML = `<span class="negative">Hata: ${error.message}</span>`; }
+    }
+
+    async function displayDynamicWeightSimulation(name, type) {
+        showResultArea(true);
+        document.getElementById('result-title').textContent = `"${name}" - Dinamik Ağırlık Simülasyonu`;
+        try {
+            const endpoint = type === 'portfolio' ? `/get_portfolio/${name}` : `/get_composition/${name}`;
+            const portfolioResponse = await fetch(endpoint);
+            const portfolio = await portfolioResponse.json();
+            if (![...(portfolio.stocks || []), ...(portfolio.funds || [])].some(a => a.adet > 0)) { throw new Error('Bu simülasyon için en az bir varlığa adet girilmiş olmalıdır.'); }
+            const response = await fetch('/calculate_dynamic_weights', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(portfolio) });
+            const result = await response.json();
+            if (!response.ok) { throw new Error(result.error); }
+            showResultArea(false);
+            const totalResultDiv = document.getElementById('total-result');
+            totalResultDiv.textContent = `${result.total_change >= 0 ? '+' : ''}${result.total_change.toFixed(2)}%`;
+            totalResultDiv.className = result.total_change >= 0 ? 'positive' : 'negative';
+            const container = document.getElementById('stock-results-container');
+            container.innerHTML = '<h3>Simülasyon Detayları</h3>' + buildSimulationDetailsTable(result.details);
+            container.style.display = 'block';
+        } catch (error) { showResultArea(false); document.getElementById('total-result').innerHTML = `<span class="negative">Hata: ${error.message}</span>`; }
+    }
+    
+    function buildSimulationDetailsTable(details) {
+        let table = '<table class="detail-table"><thead><tr><th>Varlık</th><th>Dinamik Ağırlık</th><th>Günlük Değişim</th><th>Ağırlıklı Etki</th></tr></thead><tbody>';
+        details.forEach(item => {
+            table += `<tr><td><b>${item.ticker}</b>${item.error?'<br><small class="negative">(Fiyat alınamadı)</small>':''}</td><td>${item.dynamic_weight.toFixed(2)}%</td><td class="${item.daily_change > 0 ? 'positive' : 'negative'}">${item.daily_change.toFixed(2)}%</td><td class="${item.weighted_impact > 0 ? 'positive' : 'negative'}">${item.weighted_impact.toFixed(4)}%</td></tr>`;
+        });
+        return table + '</tbody></table>';
+    }
+
     function showResultArea(isLoading) {
         showScreen('result-area');
         document.getElementById('loader').style.display = isLoading ? 'block' : 'none';
         document.getElementById('result-content').style.display = isLoading ? 'none' : 'block';
-        if (isLoading) {
-             document.getElementById('result-content').style.display = 'none';
-        } else {
-            document.getElementById('result-content').style.display = 'block';
+        if (!isLoading) {
             document.getElementById('total-result').innerHTML = '';
             ['stock-results-container', 'fund-results-container', 'historical-results-container'].forEach(id => document.getElementById(id).style.display = 'none');
         }
