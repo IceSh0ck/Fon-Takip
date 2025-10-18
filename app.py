@@ -6,7 +6,6 @@ import requests
 from datetime import date, timedelta, datetime
 import pandas as pd
 from supabase import create_client, Client
-from functools import lru_cache
 
 app = Flask(__name__)
 
@@ -16,33 +15,35 @@ SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 
-# --- GENEL VERİ YÖNETİM FONKSİYONLARI ---
+# --- VERİ YÜKLEME VE KAYDETME FONKSİYONLARI ---
 
-def load_data_from_table(table_name):
-    """Belirtilen tablodan tüm veriyi yükler."""
+def load_portfolios():
+    """Supabase veritabanından tüm portföyleri yükler."""
     try:
-        response = supabase.table(table_name).select('name, data').execute()
-        return {row['name']: row['data'] for row in response.data}
+        response = supabase.table('portfolios').select('name, data').execute()
+        portfolios_dict = {row['name']: row['data'] for row in response.data}
+        return portfolios_dict
     except Exception as e:
-        print(f"{table_name} yüklenirken hata: {e}")
+        print(f"Supabase'den veri yüklenirken hata: {e}")
         return {}
 
-def save_data_to_table(table_name, data_dict):
-    """Veri sözlüğünü belirtilen tabloya kaydeder/günceller."""
+def save_portfolios(portfolios_dict):
+    """Tüm portföy sözlüğünü Supabase veritabanına kaydeder/günceller."""
     try:
-        response = supabase.table(table_name).select('name').execute()
+        response = supabase.table('portfolios').select('name').execute()
         db_names = {row['name'] for row in response.data}
-        local_names = set(data_dict.keys())
+        local_names = set(portfolios_dict.keys())
         names_to_delete = list(db_names - local_names)
 
         if names_to_delete:
-            supabase.table(table_name).delete().in_('name', names_to_delete).execute()
+            supabase.table('portfolios').delete().in_('name', names_to_delete).execute()
 
-        if data_dict:
-            records_to_save = [{'name': name, 'data': data} for name, data in data_dict.items()]
-            supabase.table(table_name).upsert(records_to_save).execute()
+        if portfolios_dict:
+            records_to_save = [{'name': name, 'data': data} for name, data in portfolios_dict.items()]
+            supabase.table('portfolios').upsert(records_to_save).execute()
+            
     except Exception as e:
-        print(f"{table_name} kaydedilirken hata: {e}")
+        print(f"Supabase'e veri kaydedilirken hata: {e}")
 
 
 # --- API ENDPOINT'LERİ ---
@@ -51,144 +52,46 @@ def save_data_to_table(table_name, data_dict):
 def index():
     return render_template('index.html')
 
-# --- PORTFÖY ENDPOINT'LERİ ---
 @app.route('/get_portfolios', methods=['GET'])
 def get_portfolios():
-    return jsonify(sorted(list(load_data_from_table('portfolios').keys())))
+    portfolios = load_portfolios()
+    return jsonify(sorted(list(portfolios.keys())))
 
 @app.route('/get_portfolio/<portfolio_name>', methods=['GET'])
 def get_portfolio(portfolio_name):
-    portfolio_data = load_data_from_table('portfolios').get(portfolio_name)
+    portfolios = load_portfolios()
+    portfolio_data = portfolios.get(portfolio_name)
     if portfolio_data and 'current' in portfolio_data:
         return jsonify(portfolio_data['current'])
     return jsonify({'error': 'Portföy bulunamadı'}), 404
 
-# --- FON İÇERİKLERİ ENDPOINT'LERİ ---
-@app.route('/get_compositions', methods=['GET'])
-def get_compositions():
-    return jsonify(sorted(list(load_data_from_table('fund_compositions').keys())))
-
-@app.route('/get_composition/<composition_name>', methods=['GET'])
-def get_composition(composition_name):
-    composition_data = load_data_from_table('fund_compositions').get(composition_name)
-    if composition_data and 'current' in composition_data:
-        return jsonify(composition_data['current'])
-    return jsonify({'error': 'Fon içeriği bulunamadı'}), 404
-
-# --- GENEL KAYDETME VE SİLME ENDPOINT'LERİ ---
-@app.route('/save_item', methods=['POST'])
-def save_item():
+@app.route('/save_portfolio', methods=['POST'])
+def save_portfolio():
     data = request.get_json()
-    item_type = data.get('type')
-    item_name = data.get('name')
-    if not all([item_type, item_name]): return jsonify({'error': 'Tip ve isim belirtilmelidir'}), 400
-
-    table_name = 'portfolios' if item_type == 'portfolio' else 'fund_compositions'
-    all_items = load_data_from_table(table_name)
-    item_container = all_items.get(item_name, {'current': None, 'history': []})
-
-    if item_container.get('current'):
-        previous_version = item_container['current']
+    portfolio_name = data.get('name')
+    stocks = data.get('stocks', [])
+    funds = data.get('funds', [])
+    if not portfolio_name or (not stocks and not funds):
+        return jsonify({'error': 'Portföy adı ve en az bir varlık girilmelidir'}), 400
+    
+    portfolios = load_portfolios()
+    portfolio_container = portfolios.get(portfolio_name, {'current': None, 'history': []})
+    
+    if portfolio_container.get('current'):
+        previous_version = portfolio_container['current']
         previous_version['save_timestamp'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        item_container['history'].insert(0, previous_version)
-        item_container['history'] = item_container['history'][:5]
+        if 'save_date' in previous_version:
+            del previous_version['save_date']
+        
+        portfolio_container['history'].insert(0, previous_version)
+        portfolio_container['history'] = portfolio_container['history'][:5]
 
-    item_container['current'] = {
-        'name': item_name,
-        'stocks': data.get('stocks', []),
-        'funds': data.get('funds', [])
-    }
-    all_items[item_name] = item_container
-    save_data_to_table(table_name, all_items)
-    return jsonify({'success': f'"{item_name}" başarıyla kaydedildi.'})
-
-@app.route('/delete_item', methods=['POST'])
-def delete_item():
-    data = request.get_json()
-    item_type = data.get('type')
-    item_name = data.get('name')
-    if not all([item_type, item_name]): return jsonify({'error': 'Tip ve isim belirtilmelidir'}), 400
-
-    table_name = 'portfolios' if item_type == 'portfolio' else 'fund_compositions'
-    all_items = load_data_from_table(table_name)
-
-    if item_name in all_items:
-        del all_items[item_name]
-        save_data_to_table(table_name, all_items)
-        return jsonify({'success': f'"{item_name}" başarıyla silindi.'})
-    else:
-        return jsonify({'error': 'Silinecek öğe bulunamadı.'}), 404
-
-# --- GEÇMİŞ VE GERİ ALMA ENDPOINT'LERİ (GENELLEŞTİRİLDİ) ---
-def _get_item_history(item_type, item_name):
-    table_name = 'portfolios' if item_type == 'portfolio' else 'fund_compositions'
-    item_data = load_data_from_table(table_name).get(item_name)
-    if not item_data: return jsonify({'error': 'Öğe bulunamadı.'}), 404
+    new_current_version = {'name': portfolio_name, 'stocks': stocks, 'funds': funds}
+    portfolio_container['current'] = new_current_version
+    portfolios[portfolio_name] = portfolio_container
     
-    for entry in item_data.get('history', []):
-        if 'save_timestamp' in entry:
-            try:
-                dt_obj = datetime.strptime(entry['save_timestamp'], '%Y-%m-%d %H:%M:%S')
-                entry['display_timestamp'] = dt_obj.strftime('%d.%m.%Y %H:%M')
-            except ValueError: entry['display_timestamp'] = entry['save_timestamp']
-    return jsonify(item_data)
-
-@app.route('/get_item_history/<item_type>/<item_name>', methods=['GET'])
-def get_item_history(item_type, item_name):
-    return _get_item_history(item_type, item_name)
-
-def _revert_item(item_type, item_name):
-    table_name = 'portfolios' if item_type == 'portfolio' else 'fund_compositions'
-    all_items = load_data_from_table(table_name)
-    item_data = all_items.get(item_name)
-
-    if not item_data or not item_data.get('history'):
-        return jsonify({'error': 'Geri alınacak versiyon bulunamadı.'}), 400
-    
-    last_history_item = item_data['history'].pop(0)
-    for key in ['save_timestamp', 'display_timestamp', 'save_date']:
-        if key in last_history_item: del last_history_item[key]
-
-    item_data['current'] = last_history_item
-    all_items[item_name] = item_data
-    save_data_to_table(table_name, all_items)
-    return jsonify({'success': f'"{item_name}" bir önceki versiyona geri alındı.'})
-
-@app.route('/revert_item/<item_type>/<item_name>', methods=['POST'])
-def revert_item(item_type, item_name):
-    return _revert_item(item_type, item_name)
-
-# --- HESAPLAMA ENDPOINT'LERİ ---
-@lru_cache(maxsize=128)
-def _get_daily_change_cached(ticker, asset_type, sdt, fdt):
-    try:
-        if asset_type == 'stock':
-            if ticker in ['NAKIT', 'CASH', 'TAHVIL', 'BOND', 'DEVLET TAHVILI']: return 0.0
-            yf_ticker = ticker + '.IS' if not ticker.endswith('.IS') else ticker
-            hist = yf.Ticker(yf_ticker).history(period="2d")
-            if len(hist) >= 2: return (hist['Close'].iloc[-1] - hist['Close'].iloc[-2]) / hist['Close'].iloc[-2] * 100
-        elif asset_type == 'fund':
-            res = requests.get(f"https://www.tefas.gov.tr/api/DB/BindHistoryPrice?sdt={sdt}&fdt={fdt}&kod={ticker}", timeout=10)
-            fund_data = [i for i in res.json() if i.get('BirimPayDegeri') is not None]
-            if len(fund_data) >= 2: return (fund_data[-1]['BirimPayDegeri'] - fund_data[-2]['BirimPayDegeri']) / fund_data[-2]['BirimPayDegeri'] * 100
-    except Exception: pass
-    return 0.0
-
-def get_asset_performance_recursively(ticker, asset_type, sdt, fdt, compositions_dict):
-    if asset_type == 'fund' and ticker in compositions_dict:
-        total_weighted_change = 0.0
-        components = compositions_dict[ticker]['current'].get('stocks', []) + compositions_dict[ticker]['current'].get('funds', [])
-        total_internal_weight = sum(float(c.get('weight', 0)) for c in components)
-        if total_internal_weight == 0: return 0.0
-        for component in components:
-            comp_ticker = component['ticker']
-            comp_type = 'stock' if any(s['ticker'] == comp_ticker for s in compositions_dict[ticker]['current'].get('stocks', [])) else 'fund'
-            comp_weight = float(component.get('weight', 0))
-            comp_change = get_asset_performance_recursively(comp_ticker, comp_type, sdt, fdt, compositions_dict)
-            total_weighted_change += (comp_weight / total_internal_weight) * comp_change
-        return total_weighted_change
-    else:
-        return _get_daily_change_cached(ticker, asset_type, sdt, fdt)
+    save_portfolios(portfolios)
+    return jsonify({'success': f'"{portfolio_name}" portföyü başarıyla kaydedildi.'})
 
 @app.route('/calculate', methods=['POST'])
 def calculate():
@@ -196,51 +99,72 @@ def calculate():
     stocks = data.get('stocks', [])
     funds = data.get('funds', [])
     if not stocks and not funds: return jsonify({'error': 'Hesaplanacak veri gönderilmedi.'}), 400
-    _get_daily_change_cached.cache_clear()
-    defined_compositions = load_data_from_table('fund_compositions')
-    sdt, fdt = (date.today() - timedelta(days=10)).strftime('%d-%m-%Y'), date.today().strftime('%d-%m-%Y')
     total_portfolio_change, asset_details = 0.0, []
-    for asset in (stocks + funds):
-        ticker, weight = asset.get('ticker').strip().upper(), float(asset.get('weight', 0))
-        asset_type = 'stock' if asset in stocks else 'fund'
-        daily_change = get_asset_performance_recursively(ticker, asset_type, sdt, fdt, defined_compositions)
-        weighted_impact = (weight / 100) * daily_change
-        total_portfolio_change += weighted_impact
-        asset_details.append({'type': asset_type, 'ticker': ticker, 'daily_change': daily_change, 'weighted_impact': weighted_impact})
+    for stock in stocks:
+        ticker, weight = stock.get('ticker').strip().upper(), float(stock.get('weight', 0))
+        if ticker in ['NAKIT', 'CASH', 'TAHVIL', 'BOND', 'DEVLET TAHVILI']:
+            asset_details.append({'type': 'stock', 'ticker': ticker.capitalize(), 'daily_change': 0.0, 'weighted_impact': 0.0})
+            continue
+        yf_ticker = ticker + '.IS' if not ticker.endswith('.IS') else ticker
+        try:
+            hist = yf.Ticker(yf_ticker).history(period="2d")
+            daily_change = (hist['Close'].iloc[-1] - hist['Close'].iloc[-2]) / hist['Close'].iloc[-2] * 100 if len(hist) >= 2 else 0.0
+            total_portfolio_change += (weight / 100) * daily_change
+            asset_details.append({'type': 'stock', 'ticker': ticker, 'daily_change': daily_change, 'weighted_impact': (weight / 100) * daily_change})
+        except Exception: asset_details.append({'type': 'stock', 'ticker': ticker, 'daily_change': 0.0, 'weighted_impact': 0.0, 'error': 'Veri alınamadı'})
+    
+    today, sdt = date.today(), (date.today() - timedelta(days=10)).strftime('%d-%m-%Y')
+    fdt = today.strftime('%d-%m-%Y')
+    for fund in funds:
+        fund_code, weight = fund.get('ticker').strip().upper(), float(fund.get('weight', 0))
+        try:
+            res = requests.get(f"https://www.tefas.gov.tr/api/DB/BindHistoryPrice?sdt={sdt}&fdt={fdt}&kod={fund_code}", timeout=10)
+            res.raise_for_status()
+            fund_data = [i for i in res.json() if i.get('BirimPayDegeri') is not None]
+            if len(fund_data) >= 2:
+                last, prev = fund_data[-1], fund_data[-2]
+                daily_change = (last['BirimPayDegeri'] - prev['BirimPayDegeri']) / prev['BirimPayDegeri'] * 100
+                date_range = f"{datetime.strptime(prev['Tarih'],'%Y-%m-%dT%H:%M:%S').strftime('%d.%m.%Y')} → {datetime.strptime(last['Tarih'],'%Y-%m-%dT%H:%M:%S').strftime('%d.%m.%Y')}"
+            else: daily_change, date_range = 0.0, "Yetersiz Veri"
+            total_portfolio_change += (weight / 100) * daily_change
+            asset_details.append({'type': 'fund', 'ticker': fund_code, 'daily_change': daily_change, 'weighted_impact': (weight / 100) * daily_change, 'date_range': date_range})
+        except Exception: asset_details.append({'type': 'fund', 'ticker': fund_code, 'daily_change': 0.0, 'weighted_impact': 0.0, 'error': 'Veri alınamadı'})
+    
     return jsonify({'total_change': total_portfolio_change, 'details': asset_details})
 
-@app.route('/calculate_historical/<item_type>/<item_name>', methods=['GET'])
-def calculate_historical(item_type, item_name):
-    table_name = 'portfolios' if item_type == 'portfolio' else 'fund_compositions'
-    item_container = load_data_from_table(table_name).get(item_name)
-    if not item_container: return jsonify({'error': 'Öğe bulunamadı'}), 404
-    portfolio = item_container.get('current')
-    if not portfolio: return jsonify({'error': 'Güncel versiyon bulunamadı.'}), 404
-    
+@app.route('/calculate_historical/<portfolio_name>', methods=['GET'])
+def calculate_historical(portfolio_name):
+    portfolios = load_portfolios()
+    portfolio_container = portfolios.get(portfolio_name)
+    if not portfolio_container: return jsonify({'error': 'Portföy bulunamadı'}), 404
+    portfolio = portfolio_container.get('current')
+    if not portfolio: return jsonify({'error': 'Portföyün güncel versiyonu bulunamadı.'}), 404
     end_date, start_date = date.today(), date.today() - timedelta(days=45)
     all_assets = portfolio.get('stocks', []) + portfolio.get('funds', [])
-    if not all_assets: return jsonify({'error': 'Hesaplanacak varlık yok.'}), 400
-    
+    if not all_assets: return jsonify({'error': 'Portföyde hesaplanacak varlık yok.'}), 400
     asset_prices_df = pd.DataFrame()
+    stocks_in_portfolio = portfolio.get('stocks', [])
+    if stocks_in_portfolio:
+        stock_tickers_is = [s['ticker'].strip().upper() + '.IS' for s in stocks_in_portfolio]
+        try:
+            stock_data = yf.download(stock_tickers_is, start=start_date, end=end_date, progress=False)
+            if not stock_data.empty:
+                close_prices = stock_data['Close'] if len(stock_tickers_is) > 1 else stock_data[['Close']]
+                asset_prices_df = pd.concat([asset_prices_df, close_prices], axis=1)
+        except Exception as e:
+            print(f"Hisse senedi verisi alınırken hata: {e}")
     sdt_str, fdt_str = start_date.strftime('%d-%m-%Y'), end_date.strftime('%d-%m-%Y')
-    
-    stock_tickers = [s['ticker'].strip().upper() for s in portfolio.get('stocks', [])]
-    if stock_tickers:
-        try:
-            stock_data = yf.download([t + '.IS' for t in stock_tickers], start=start_date, end=end_date, progress=False)
-            if not stock_data.empty: asset_prices_df = pd.concat([asset_prices_df, stock_data['Close']], axis=1)
-        except Exception as e: print(f"Hisse verisi hatası: {e}")
-    
     for fund in portfolio.get('funds', []):
+        fund_code = fund['ticker'].strip().upper()
         try:
-            res = requests.get(f"https://www.tefas.gov.tr/api/DB/BindHistoryPrice?sdt={sdt_str}&fdt={fdt_str}&kod={fund['ticker']}", timeout=10)
-            df = pd.DataFrame(res.json())
-            if not df.empty:
+            res = requests.get(f"https://www.tefas.gov.tr/api/DB/BindHistoryPrice?sdt={sdt_str}&fdt={fdt_str}&kod={fund_code}", timeout=10)
+            fund_data = res.json()
+            if fund_data:
+                df = pd.DataFrame(fund_data)
                 df['Tarih'] = pd.to_datetime(df['Tarih'])
-                df = df.set_index('Tarih')[['BirimPayDegeri']].rename(columns={'BirimPayDegeri': fund['ticker']})
+                df = df.set_index('Tarih')[['BirimPayDegeri']].rename(columns={'BirimPayDegeri': fund_code})
                 asset_prices_df = pd.concat([asset_prices_df, df], axis=1)
-        except Exception as e: print(f"Fon verisi hatası ({fund['ticker']}): {e}")
-
+        except Exception as e: print(f"Fon verisi alınırken hata ({fund_code}): {e}")
     if asset_prices_df.empty: return jsonify({'error': 'Tarihsel veri bulunamadı.'}), 400
     asset_prices_df.columns = asset_prices_df.columns.str.replace('.IS', '', regex=False)
     asset_prices_df = asset_prices_df.ffill().dropna(how='all')
@@ -249,49 +173,155 @@ def calculate_historical(item_type, item_name):
     aligned_weights = pd.Series(weights_dict).reindex(daily_returns.columns).fillna(0)
     portfolio_daily_returns = (daily_returns * aligned_weights).sum(axis=1) * 100
     valid_returns = portfolio_daily_returns.dropna()
-    return jsonify({'dates': valid_returns.index.strftime('%d.%m.%Y').tolist()[-30:], 'returns': valid_returns.tolist()[-30:]})
+    dates = valid_returns.index.strftime('%d.%m.%Y').tolist()[-30:]
+    returns = valid_returns.tolist()[-30:]
+    return jsonify({'dates': dates, 'returns': returns})
 
+@app.route('/get_portfolio_history/<portfolio_name>', methods=['GET'])
+def get_portfolio_history(portfolio_name):
+    portfolios = load_portfolios()
+    portfolio_data = portfolios.get(portfolio_name)
+    if not portfolio_data or not portfolio_data.get('current'):
+        return jsonify({'error': 'Portföy veya geçmişi bulunamadı.'}), 400
+    
+    for entry in portfolio_data.get('history', []):
+        if 'save_timestamp' in entry:
+            try:
+                dt_obj = datetime.strptime(entry['save_timestamp'], '%Y-%m-%d %H:%M:%S')
+                entry['display_timestamp'] = dt_obj.strftime('%d.%m.%Y %H:%M')
+            except ValueError:
+                entry['display_timestamp'] = entry['save_timestamp'] 
+
+    return jsonify(portfolio_data)
+
+
+@app.route('/revert_portfolio/<portfolio_name>', methods=['POST'])
+def revert_portfolio(portfolio_name):
+    portfolios = load_portfolios()
+    portfolio_data = portfolios.get(portfolio_name)
+    if not portfolio_data or not portfolio_data.get('history'):
+        return jsonify({'error': 'Geri alınacak bir önceki versiyon bulunamadı.'}), 400
+    
+    last_history_item = portfolio_data['history'].pop(0)
+    if 'save_timestamp' in last_history_item: del last_history_item['save_timestamp']
+    if 'display_timestamp' in last_history_item: del last_history_item['display_timestamp']
+    if 'save_date' in last_history_item: del last_history_item['save_date']
+
+    portfolio_data['current'] = last_history_item
+    portfolios[portfolio_name] = portfolio_data
+    save_portfolios(portfolios)
+    return jsonify({'success': f'"{portfolio_name}" portföyü bir önceki versiyona başarıyla geri alındı.'})
+
+@app.route('/delete_portfolio', methods=['POST'])
+def delete_portfolio():
+    data = request.get_json()
+    portfolio_name_to_delete = data.get('name')
+    if not portfolio_name_to_delete: return jsonify({'error': 'Silinecek portföy adı belirtilmedi.'}), 400
+    
+    portfolios = load_portfolios()
+    if portfolio_name_to_delete in portfolios:
+        del portfolios[portfolio_name_to_delete]
+        save_portfolios(portfolios)
+        return jsonify({'success': f'"{portfolio_name_to_delete}" portföyü başarıyla silindi.'})
+    else:
+        return jsonify({'error': 'Silinecek portföy bulunamadı.'}), 404
+
+# YENİ EKLENEN ENDPOINT
 @app.route('/calculate_dynamic_weights', methods=['POST'])
 def calculate_dynamic_weights():
     data = request.get_json()
     stocks = data.get('stocks', [])
     funds = data.get('funds', [])
-    if not (stocks or funds): return jsonify({'error': 'Veri gönderilmedi.'}), 400
+    if not stocks and not funds:
+        return jsonify({'error': 'Hesaplanacak veri gönderilmedi.'}), 400
 
-    total_portfolio_value, asset_market_values = 0.0, []
-    sdt, fdt = (date.today() - timedelta(days=10)).strftime('%d-%m-%Y'), date.today().strftime('%d-%m-%Y')
+    total_portfolio_value = 0.0
+    asset_market_values = []
     
+    # 1. Adım: Tüm varlıkların güncel piyasa değerlerini hesapla
     for stock in stocks:
         ticker, adet = stock.get('ticker').strip().upper(), int(stock.get('adet') or 0)
         if adet == 0: continue
-        try:
-            price = 1.0 if ticker in ['NAKIT', 'CASH'] else yf.Ticker(ticker + '.IS').history(period="1d")['Close'].iloc[0]
-            market_value = price * adet
-            asset_market_values.append({'type': 'stock', 'ticker': ticker, 'market_value': market_value, 'daily_change': _get_daily_change_cached(ticker, 'stock', sdt, fdt)})
+        if ticker in ['NAKIT', 'CASH', 'TAHVIL', 'BOND', 'DEVLET TAHVILI']:
+            market_value = float(adet)
+            asset_market_values.append({'type': 'stock', 'ticker': ticker, 'adet': adet, 'market_value': market_value, 'data': None})
             total_portfolio_value += market_value
-        except Exception: asset_market_values.append({'type': 'stock', 'ticker': ticker, 'market_value': 0, 'daily_change': 0, 'error': True})
-    
+            continue
+            
+        yf_ticker = ticker + '.IS' if not ticker.endswith('.IS') else ticker
+        try:
+            hist = yf.Ticker(yf_ticker).history(period="2d")
+            if hist.empty: raise Exception("Veri yok")
+            latest_price = hist['Close'].iloc[-1]
+            market_value = latest_price * adet
+            asset_market_values.append({'type': 'stock', 'ticker': ticker, 'adet': adet, 'market_value': market_value, 'data': hist})
+            total_portfolio_value += market_value
+        except Exception as e:
+            print(f"Fiyat alınamadı ({ticker}): {e}")
+            asset_market_values.append({'type': 'stock', 'ticker': ticker, 'adet': adet, 'market_value': 0, 'data': None, 'error': 'Fiyat alınamadı'})
+
+    sdt, fdt = (date.today() - timedelta(days=10)).strftime('%d-%m-%Y'), date.today().strftime('%d-%m-%Y')
     for fund in funds:
         fund_code, adet = fund.get('ticker').strip().upper(), int(fund.get('adet') or 0)
         if adet == 0: continue
         try:
             res = requests.get(f"https://www.tefas.gov.tr/api/DB/BindHistoryPrice?sdt={sdt}&fdt={fdt}&kod={fund_code}", timeout=10)
-            price = [i['BirimPayDegeri'] for i in res.json() if i.get('BirimPayDegeri') is not None][-1]
-            market_value = price * adet
-            asset_market_values.append({'type': 'fund', 'ticker': fund_code, 'market_value': market_value, 'daily_change': _get_daily_change_cached(fund_code, 'fund', sdt, fdt)})
+            fund_data = [i for i in res.json() if i.get('BirimPayDegeri') is not None]
+            if not fund_data: raise Exception("Veri yok")
+            latest_price = fund_data[-1]['BirimPayDegeri']
+            market_value = latest_price * adet
+            asset_market_values.append({'type': 'fund', 'ticker': fund_code, 'adet': adet, 'market_value': market_value, 'data': fund_data})
             total_portfolio_value += market_value
-        except Exception: asset_market_values.append({'type': 'fund', 'ticker': fund_code, 'market_value': 0, 'daily_change': 0, 'error': True})
+        except Exception as e:
+            print(f"Fiyat alınamadı ({fund_code}): {e}")
+            asset_market_values.append({'type': 'fund', 'ticker': fund_code, 'adet': adet, 'market_value': 0, 'data': None, 'error': 'Fiyat alınamadı'})
 
-    if total_portfolio_value == 0: return jsonify({'error': 'Portföy değeri sıfır.'}), 400
+    if total_portfolio_value == 0:
+        return jsonify({'error': 'Portföy toplam değeri sıfır. Adetleri veya varlık kodlarını kontrol edin.'}), 400
 
-    total_change, details = 0.0, []
+    # 2. Adım: Yeni (dinamik) ağırlıkları hesapla ve getiri analizini yap
+    total_portfolio_change = 0.0
+    asset_details = []
     for asset in asset_market_values:
         dynamic_weight = (asset['market_value'] / total_portfolio_value) * 100
-        weighted_impact = (dynamic_weight / 100) * asset['daily_change']
-        total_change += weighted_impact
-        details.append({**asset, 'dynamic_weight': dynamic_weight, 'weighted_impact': weighted_impact})
-    
-    return jsonify({'total_change': total_change, 'details': details})
+        
+        if asset.get('error'):
+            asset_details.append({**asset, 'dynamic_weight': 0.0, 'daily_change': 0.0, 'weighted_impact': 0.0})
+            continue
+
+        daily_change = 0.0
+        date_range = None
+        
+        if asset['type'] == 'stock':
+            hist = asset['data']
+            if hist is not None and len(hist) >= 2:
+                daily_change = (hist['Close'].iloc[-1] - hist['Close'].iloc[-2]) / hist['Close'].iloc[-2] * 100
+            elif asset['ticker'] in ['NAKIT', 'CASH', 'TAHVIL', 'BOND', 'DEVLET TAHVILI']:
+                 daily_change = 0.0
+
+        elif asset['type'] == 'fund':
+            fund_data = asset['data']
+            if len(fund_data) >= 2:
+                last, prev = fund_data[-1], fund_data[-2]
+                daily_change = (last['BirimPayDegeri'] - prev['BirimPayDegeri']) / prev['BirimPayDegeri'] * 100
+                date_range = f"{datetime.strptime(prev['Tarih'],'%Y-%m-%dT%H:%M:%S').strftime('%d.%m.%Y')} → {datetime.strptime(last['Tarih'],'%Y-%m-%dT%H:%M:%S').strftime('%d.%m.%Y')}"
+            else:
+                date_range = "Yetersiz Veri"
+
+        weighted_impact = (dynamic_weight / 100) * daily_change
+        total_portfolio_change += weighted_impact
+        
+        detail = {
+            'type': asset['type'],
+            'ticker': asset['ticker'],
+            'dynamic_weight': dynamic_weight,
+            'daily_change': daily_change,
+            'weighted_impact': weighted_impact
+        }
+        if date_range: detail['date_range'] = date_range
+        asset_details.append(detail)
+        
+    return jsonify({'total_change': total_portfolio_change, 'details': asset_details})
 
 
 if __name__ == '__main__':
