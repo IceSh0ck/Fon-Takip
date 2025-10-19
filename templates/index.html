@@ -45,6 +45,9 @@
         #btn-delete-mode { background-color: #e74c3c !important; }
         #btn-delete-mode:hover { background-color: #c0392b !important; }
         #btn-delete-mode.active { background-color: #c0392b !important; border: 2px solid #2c3e50; }
+        /* YENİ EKLENEN BUTON STİLİ */
+        #btn-control { background-color: #7f8c8d !important; }
+        #btn-control:hover { background-color: #5d6d7e !important; }
         body.delete-mode-active #portfolio-list li:hover { background-color: #f5b7b1; text-decoration: line-through; }
         .comparison-selector { display: flex; flex-wrap: wrap; gap: 20px; align-items: center; justify-content: center; margin-bottom: 20px; padding: 15px; background-color: #ecf0f1; border-radius: 6px;}
         .comparison-selector div { flex: 1; min-width: 250px; }
@@ -59,6 +62,7 @@
         <div class="sidebar-actions">
             <button id="btn-new-portfolio">Yeni Fon Ekle</button>
             <button id="btn-delete-mode">Fonu Sil</button>
+            <button id="btn-control">Kontrol</button>
         </div>
     </div>
     <div class="content">
@@ -85,6 +89,12 @@
             <div id="comparison-table-container">
             </div>
         </div>
+
+        <div class="container" id="control-panel-container" style="display: none;">
+            <h2>Kontrol Paneli</h2>
+            <p>Burası yeni geliştirme ve test alanıdır.</p>
+            </div>
+
         <div class="container" id="form-container" style="display: block;">
             <a href="#" class="back-button" title="Seçeneklere Geri Dön" style="display: none;">&larr;</a>
             <form id="portfolio-form">
@@ -133,8 +143,33 @@
         document.getElementById('btn-new-portfolio').addEventListener('click', showNewPortfolioForm);
         document.getElementById('btn-delete-mode').addEventListener('click', toggleDeleteMode);
         document.getElementById('portfolio-form').addEventListener('submit', handleCalculate);
+        // YENİ EKLENEN EVENT LISTENER
+        document.getElementById('btn-control').addEventListener('click', showControlPanel);
     });
     
+    // YENİ EKLENEN FONKSİYON
+    function showControlPanel() {
+        const password = prompt("Lütfen kontrol paneli şifresini girin:");
+        const correctPassword = "159357";
+
+        if (password === correctPassword) {
+            // Diğer tüm ana pencereleri gizle
+            ['options-container', 'form-container', 'result-area', 'report-container', 'comparison-container'].forEach(id => {
+                document.getElementById(id).style.display = 'none';
+            });
+            
+            // Kontrol panelini göster
+            document.getElementById('control-panel-container').style.display = 'block';
+
+            // Listeden aktif seçimi kaldır
+            document.querySelectorAll('#portfolio-list li').forEach(li => li.classList.remove('active'));
+            currentPortfolioName = null;
+        } else if (password !== null) { // Kullanıcı "Tamam" dedi ama şifre yanlışsa
+            alert("Hatalı şifre!");
+        }
+        // password null ise kullanıcı "İptal" demiştir, bir şey yapma.
+    }
+
     function toggleDeleteMode() {
         isDeleteMode = !isDeleteMode;
         const deleteButton = document.getElementById('btn-delete-mode');
@@ -143,7 +178,7 @@
             deleteButton.classList.add('active');
             deleteButton.textContent = 'Silme Modundan Çık';
             body.classList.add('delete-mode-active');
-            ['options-container', 'form-container', 'result-area', 'report-container', 'comparison-container'].forEach(id => document.getElementById(id).style.display = 'none');
+            ['options-container', 'form-container', 'result-area', 'report-container', 'comparison-container', 'control-panel-container'].forEach(id => document.getElementById(id).style.display = 'none');
             alert('Silme modu aktif. Silmek istediğiniz fonu listeden seçin.');
         } else {
             deleteButton.classList.remove('active');
@@ -159,7 +194,7 @@
         document.getElementById('portfolio-name').value = '';
         document.getElementById('stocks-container').innerHTML = '';
         document.getElementById('funds-container').innerHTML = '';
-        ['options-container', 'result-area', 'report-container', 'comparison-container'].forEach(id => document.getElementById(id).style.display = 'none');
+        ['options-container', 'result-area', 'report-container', 'comparison-container', 'control-panel-container'].forEach(id => document.getElementById(id).style.display = 'none');
         document.getElementById('form-container').style.display = 'block';
         document.querySelector('#form-container .back-button').style.display = 'none';
         document.getElementById('result-area').style.display = 'none';
@@ -230,7 +265,7 @@
         document.getElementById('btn-edit-portfolio').onclick = () => showPortfolioEditor(name);
         document.getElementById('btn-show-simulation').onclick = () => displayDynamicWeightSimulation(name);
 
-        ['form-container', 'result-area', 'report-container', 'comparison-container'].forEach(id => document.getElementById(id).style.display = 'none');
+        ['form-container', 'result-area', 'report-container', 'comparison-container', 'control-panel-container'].forEach(id => document.getElementById(id).style.display = 'none');
         document.getElementById('options-container').style.display = 'block';
 
         fetchAndDisplayLiveReturn(name);
@@ -279,11 +314,11 @@
         if(portfolioChart) { portfolioChart.destroy(); }
         portfolioChart = new Chart(ctx, { type: 'pie', data: { labels: labels, datasets: [{ label: 'Fon Ağırlığı (%)', data: data, backgroundColor: generateDeterministicColors(labels), borderColor: '#fff', borderWidth: 1 }] }, options: { responsive: true, plugins: { legend: { position: 'top' }, tooltip: { callbacks: { label: (context) => `${context.label}: ${context.raw.toFixed(2)}%` } } } } });
         document.getElementById('report-container').style.display = 'block';
-        ['options-container', 'form-container', 'result-area', 'comparison-container'].forEach(id => document.getElementById(id).style.display = 'none');
+        ['options-container', 'form-container', 'result-area', 'comparison-container', 'control-panel-container'].forEach(id => document.getElementById(id).style.display = 'none');
     }
 
     async function displayWeightChangeReport(name) {
-        ['options-container', 'report-container', 'form-container', 'result-area'].forEach(id => document.getElementById(id).style.display = 'none');
+        ['options-container', 'report-container', 'form-container', 'result-area', 'control-panel-container'].forEach(id => document.getElementById(id).style.display = 'none');
         const container = document.getElementById('comparison-container');
         const tableContainer = document.getElementById('comparison-table-container');
         const title = document.getElementById('comparison-title');
@@ -543,7 +578,7 @@
         fundsContainer.innerHTML = '';
         (portfolio.funds || []).forEach(f => addAsset('fund', f.ticker, f.weight, f.adet));
         document.getElementById('form-container').style.display = 'block';
-        ['options-container', 'result-area', 'report-container', 'comparison-container'].forEach(id=>document.getElementById(id).style.display='none');
+        ['options-container', 'result-area', 'report-container', 'comparison-container', 'control-panel-container'].forEach(id=>document.getElementById(id).style.display='none');
         document.querySelector('#form-container .back-button').style.display = 'block';
     }
     
@@ -582,7 +617,7 @@
     }
 
     function showResultArea(isLoading) {
-        ['options-container', 'report-container', 'form-container', 'comparison-container'].forEach(id => document.getElementById(id).style.display = 'none');
+        ['options-container', 'report-container', 'form-container', 'comparison-container', 'control-panel-container'].forEach(id => document.getElementById(id).style.display = 'none');
         document.getElementById('result-area').style.display = 'block';
         
         document.getElementById('total-result').innerHTML = '';
