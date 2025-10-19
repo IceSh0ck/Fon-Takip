@@ -45,13 +45,21 @@
         #btn-delete-mode { background-color: #e74c3c !important; }
         #btn-delete-mode:hover { background-color: #c0392b !important; }
         #btn-delete-mode.active { background-color: #c0392b !important; border: 2px solid #2c3e50; }
-        /* YENİ EKLENEN BUTON STİLİ */
         #btn-control { background-color: #7f8c8d !important; }
         #btn-control:hover { background-color: #5d6d7e !important; }
         body.delete-mode-active #portfolio-list li:hover { background-color: #f5b7b1; text-decoration: line-through; }
         .comparison-selector { display: flex; flex-wrap: wrap; gap: 20px; align-items: center; justify-content: center; margin-bottom: 20px; padding: 15px; background-color: #ecf0f1; border-radius: 6px;}
         .comparison-selector div { flex: 1; min-width: 250px; }
         .comparison-selector label { font-weight: bold; display: block; margin-bottom: 5px; }
+
+        /* KONTROL PANELİ İÇİN YENİ STİLLER */
+        #ranking-timestamp { text-align: center; color: #7f8c8d; margin-top: -10px; margin-bottom: 20px; font-size: 0.9em; }
+        .ranking-table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        .ranking-table th, .ranking-table td { padding: 12px 15px; border-bottom: 1px solid #ecf0f1; text-align: left; }
+        .ranking-table th { background-color: #f8f9f9; font-weight: 600; color: #5d6d7e; }
+        .ranking-table tr:hover { background-color: #f4f7f9; }
+        .ranking-table .fund-name { font-weight: bold; color: #2c3e50; }
+        .ranking-table .fund-return { font-weight: bold; font-size: 1.1em; text-align: right; }
     </style>
 </head>
 <body>
@@ -89,11 +97,14 @@
             <div id="comparison-table-container">
             </div>
         </div>
-
+        
         <div class="container" id="control-panel-container" style="display: none;">
-            <h2>Kontrol Paneli</h2>
-            <p>Burası yeni geliştirme ve test alanıdır.</p>
+            <h2>Canlı Fon Getiri Sıralaması</h2>
+            <div id="ranking-timestamp"></div>
+            <div id="live-ranking-table">
+                <div class="loader"></div>
             </div>
+        </div>
 
         <div class="container" id="form-container" style="display: block;">
             <a href="#" class="back-button" title="Seçeneklere Geri Dön" style="display: none;">&larr;</a>
@@ -128,6 +139,7 @@
     let portfolioChart = null;
     let historicalChart = null;
     let isDeleteMode = false;
+    let rankingInterval = null;
 
     document.addEventListener('DOMContentLoaded', () => { 
         loadPortfolios(); 
@@ -143,31 +155,82 @@
         document.getElementById('btn-new-portfolio').addEventListener('click', showNewPortfolioForm);
         document.getElementById('btn-delete-mode').addEventListener('click', toggleDeleteMode);
         document.getElementById('portfolio-form').addEventListener('submit', handleCalculate);
-        // YENİ EKLENEN EVENT LISTENER
         document.getElementById('btn-control').addEventListener('click', showControlPanel);
     });
     
-    // YENİ EKLENEN FONKSİYON
     function showControlPanel() {
         const password = prompt("Lütfen kontrol paneli şifresini girin:");
         const correctPassword = "159357";
 
         if (password === correctPassword) {
-            // Diğer tüm ana pencereleri gizle
             ['options-container', 'form-container', 'result-area', 'report-container', 'comparison-container'].forEach(id => {
                 document.getElementById(id).style.display = 'none';
             });
-            
-            // Kontrol panelini göster
             document.getElementById('control-panel-container').style.display = 'block';
-
-            // Listeden aktif seçimi kaldır
             document.querySelectorAll('#portfolio-list li').forEach(li => li.classList.remove('active'));
             currentPortfolioName = null;
-        } else if (password !== null) { // Kullanıcı "Tamam" dedi ama şifre yanlışsa
+            
+            startLiveRanking();
+
+        } else if (password !== null) {
             alert("Hatalı şifre!");
         }
-        // password null ise kullanıcı "İptal" demiştir, bir şey yapma.
+    }
+
+    function startLiveRanking() {
+        stopLiveRanking(); 
+        fetchAndRenderRankings();
+        rankingInterval = setInterval(fetchAndRenderRankings, 60000);
+    }
+
+    function stopLiveRanking() {
+        if (rankingInterval) {
+            clearInterval(rankingInterval);
+            rankingInterval = null;
+        }
+    }
+
+    async function fetchAndRenderRankings() {
+        const container = document.getElementById('live-ranking-table');
+        const timestampContainer = document.getElementById('ranking-timestamp');
+        
+        try {
+            const response = await fetch('/get_all_fund_returns');
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.error || 'Sunucudan veri alınamadı.');
+            }
+            
+            data.sort((a, b) => b.return - a.return);
+
+            let tableHTML = '<table class="ranking-table"><thead><tr><th>Fon Adı</th><th style="text-align: right;">Günlük Getiri</th></tr></thead><tbody>';
+
+            if (data.length === 0) {
+                tableHTML += '<tr><td colspan="2" style="text-align:center;">Sıralanacak kayıtlı fon bulunamadı.</td></tr>';
+            } else {
+                data.forEach(fund => {
+                    const returnClass = fund.return > 0 ? 'positive' : fund.return < 0 ? 'negative' : '';
+                    const returnSign = fund.return > 0 ? '+' : '';
+                    tableHTML += `
+                        <tr>
+                            <td class="fund-name">${fund.name}</td>
+                            <td class="fund-return ${returnClass}">${returnSign}${fund.return.toFixed(2)}%</td>
+                        </tr>
+                    `;
+                });
+            }
+            
+            tableHTML += '</tbody></table>';
+            container.innerHTML = tableHTML;
+            
+            const now = new Date();
+            timestampContainer.textContent = `Son Güncelleme: ${now.toLocaleTimeString('tr-TR')}`;
+
+        } catch (error) {
+            container.innerHTML = `<p class="negative" style="text-align:center;">Hata: ${error.message}</p>`;
+            timestampContainer.textContent = 'Veri yüklenemedi.';
+        }
     }
 
     function toggleDeleteMode() {
@@ -175,6 +238,7 @@
         const deleteButton = document.getElementById('btn-delete-mode');
         const body = document.body;
         if (isDeleteMode) {
+            stopLiveRanking();
             deleteButton.classList.add('active');
             deleteButton.textContent = 'Silme Modundan Çık';
             body.classList.add('delete-mode-active');
@@ -188,6 +252,7 @@
     }
 
     function showNewPortfolioForm() {
+        stopLiveRanking();
         if(isDeleteMode) toggleDeleteMode();
         currentPortfolioName = null;
         document.querySelectorAll('#portfolio-list li').forEach(li => li.classList.remove('active'));
@@ -254,6 +319,7 @@
     }
 
     function showOptions(name, targetElement) {
+        stopLiveRanking();
         currentPortfolioName = name;
         document.querySelectorAll('#portfolio-list li').forEach(li => li.classList.remove('active'));
         if(targetElement) targetElement.classList.add('active');
@@ -603,7 +669,6 @@
         }
     });
 
-    // --- Yardımcı Fonksiyonlar ---
     function generateDeterministicColors(labels) {
         const colors = [];
         for (const label of labels) {
