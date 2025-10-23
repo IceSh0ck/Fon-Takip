@@ -172,6 +172,48 @@ def get_all_fund_returns():
     return jsonify(all_returns)
 
 
+# --- YENİ EKLENDİ: KONTROL PANELİ TAKİP LİSTESİ API'LERİ ---
+
+@app.route('/get_tracked_funds', methods=['GET'])
+def get_tracked_funds():
+    """Kontrol panelindeki takip listesini Supabase'den çeker."""
+    try:
+        response = supabase.table('control_panel_data') \
+                         .select('value') \
+                         .eq('key', 'tracked_funds') \
+                         .maybe_single() \
+                         .execute()
+        
+        if response.data and response.data.get('value'):
+            return jsonify(response.data['value'])
+        else:
+            # Anahtar bulunamazsa (veya value null ise) boş liste döndür
+            return jsonify([])
+    except Exception as e:
+        print(f"Takip listesi alınırken hata: {e}")
+        return jsonify({'error': f'Sunucu hatası: {e}'}), 500
+
+@app.route('/save_tracked_funds', methods=['POST'])
+def save_tracked_funds():
+    """Kontrol panelindeki takip listesini Supabase'e kaydeder/günceller."""
+    fund_list = request.get_json()
+    if not isinstance(fund_list, list):
+        return jsonify({'error': 'Geçersiz veri formatı. Bir liste bekleniyordu.'}), 400
+        
+    try:
+        # upsert: 'tracked_funds' anahtarı varsa 'value' günceller, yoksa yeni bir satır oluşturur.
+        supabase.table('control_panel_data') \
+                .upsert({'key': 'tracked_funds', 'value': fund_list}) \
+                .execute()
+
+        return jsonify({'success': 'Takip listesi başarıyla güncellendi.'})
+    except Exception as e:
+        print(f"Takip listesi kaydedilirken hata: {e}")
+        return jsonify({'error': f'Sunucu hatası: {e}'}), 500
+
+# --- YENİ API'LERİN SONU ---
+
+
 @app.route('/calculate_historical/<portfolio_name>', methods=['GET'])
 def calculate_historical(portfolio_name):
     portfolios = load_portfolios()
