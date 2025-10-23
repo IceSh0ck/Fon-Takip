@@ -61,7 +61,7 @@
         .ranking-table .fund-name { font-weight: bold; color: #2c3e50; }
         .ranking-table .fund-return { font-weight: bold; font-size: 1.1em; text-align: right; }
 
-        /* --- YENİ EKLENDİ: KONTROL PANELİ İKİLİ SÜTUN YERLEŞİMİ --- */
+        /* --- KONTROL PANELİ İKİLİ SÜTUN YERLEŞİMİ --- */
         .control-panel-layout { display: flex; gap: 24px; }
         .control-column-main { flex: 2; }
         .control-column-aside { flex: 1; background-color: #f8f9fa; padding: 15px 20px; border-radius: 8px; align-self: flex-start; }
@@ -83,7 +83,7 @@
         #tracking-list-ul li:last-child { border-bottom: none; }
         #tracking-list-ul li.selected { background-color: #e0eafc; font-weight: bold; }
         
-        .tracking-buttons { display: flex; gap: 10px; }
+        .tracking-buttons { display: flex; gap: 10px; margin-top: 10px; } /* GÜNCELLENDİ: margin-top eklendi */
         .tracking-buttons button { 
             flex: 1; 
             padding: 10px; 
@@ -98,6 +98,12 @@
         #btn-track-add:hover { background-color: #2980b9; }
         #btn-track-delete { background-color: #e74c3c; }
         #btn-track-delete:hover { background-color: #c0392b; }
+        
+        /* --- YENİ EKLENDİ: Yeni Kaydet/İptal Buton Stilleri --- */
+        #btn-track-save { background-color: #2ecc71; } /* Yeşil Kaydet */
+        #btn-track-save:hover { background-color: #27ae60; }
+        #btn-track-cancel { background-color: #7f8c8d; } /* Gri İptal */
+        #btn-track-cancel:hover { background-color: #5d6d7e; }
         /* --- YENİ CSS BİTİŞİ --- */
     </style>
 </head>
@@ -152,9 +158,18 @@
                     <h3>Takip Edilecek Fonlar</h3>
                     <ul id="tracking-list-ul">
                         </ul>
-                    <div class="tracking-buttons">
+
+                    <div id="track-add-form" style="display: none;">
+                        <input type="text" id="track-new-fund-name" placeholder="Yeni Fon Adı" style="margin-bottom: 10px;">
+                        <div class="tracking-buttons" style="margin-top: 0;">
+                            <button id="btn-track-save">Kaydet</button>
+                            <button id="btn-track-cancel">İptal</button>
+                        </div>
+                    </div>
+                    
+                    <div class="tracking-buttons" id="tracking-main-buttons">
                         <button id="btn-track-add">Fon Ekle</button>
-                        <button id="btn-track-delete">Fon Sil</button>
+                        <button id="btn-track-delete">Fon Sil</button> 
                     </div>
                 </div>
             </div>
@@ -194,7 +209,7 @@
     let historicalChart = null;
     let isDeleteMode = false;
     let rankingInterval = null;
-    let selectedTrackedFundLi = null; // YENİ EKLENDİ: Takip listesi için seçili öğe
+    let selectedTrackedFundLi = null;
 
     document.addEventListener('DOMContentLoaded', () => { 
         loadPortfolios(); 
@@ -212,10 +227,15 @@
         document.getElementById('portfolio-form').addEventListener('submit', handleCalculate);
         document.getElementById('btn-control').addEventListener('click', showControlPanel);
         
-        // YENİ EKLENDİ: Takip listesi butonları için event listener'lar
-        document.getElementById('btn-track-add').addEventListener('click', addTrackedFund);
+        // --- YENİ EKLENDİ / GÜNCELLENDİ: Takip listesi butonları için listener'lar ---
+        document.getElementById('btn-track-add').addEventListener('click', showTrackAddForm); // Fonksiyon adı değişti
         document.getElementById('btn-track-delete').addEventListener('click', deleteTrackedFund);
         document.getElementById('tracking-list-ul').addEventListener('click', selectTrackedFund);
+        
+        // Yeni form butonları için listener'lar
+        document.getElementById('btn-track-save').addEventListener('click', saveNewTrackedFund);
+        document.getElementById('btn-track-cancel').addEventListener('click', hideTrackAddForm);
+        // --- GÜNCELLEME BİTİŞİ ---
     });
     
     function showControlPanel() {
@@ -824,18 +844,42 @@
         return table;
     }
 
-    // --- YENİ EKLENDİ: TAKİP LİSTESİ FONKSİYONLARI ---
+    // --- YENİ EKLENDİ / GÜNCELLENDİ: TAKİP LİSTESİ FONKSİYONLARI ---
 
     /**
-     * "Takip Edilecek Fonlar" listesine yeni bir fon ekler.
+     * YENİ EKLENDİ: "Fon Ekle" butonuna basınca formu gösterir
      */
-    function addTrackedFund() {
-        const fonAdi = prompt("Takip listesine eklenecek fonun adını girin:");
-        if (fonAdi && fonAdi.trim() !== "") {
+    function showTrackAddForm() {
+        document.getElementById('tracking-main-buttons').style.display = 'none';
+        document.getElementById('track-add-form').style.display = 'block';
+        document.getElementById('track-new-fund-name').focus();
+    }
+
+    /**
+     * YENİ EKLENDİ: "İptal" butonuna basınca formu gizler
+     */
+    function hideTrackAddForm() {
+        document.getElementById('track-add-form').style.display = 'none';
+        document.getElementById('tracking-main-buttons').style.display = 'block';
+        document.getElementById('track-new-fund-name').value = ''; // Input'u temizle
+    }
+
+    /**
+     * YENİ EKLENDİ: "Kaydet" butonuna basınca fonu listeye ekler
+     */
+    function saveNewTrackedFund() {
+        const input = document.getElementById('track-new-fund-name');
+        const fonAdi = input.value.trim();
+        
+        if (fonAdi !== "") {
             const liste = document.getElementById('tracking-list-ul');
             const newLi = document.createElement('li');
-            newLi.textContent = fonAdi.trim();
+            newLi.textContent = fonAdi;
             liste.appendChild(newLi);
+            
+            hideTrackAddForm(); // Formu gizle ve temizle
+        } else {
+            alert("Lütfen bir fon adı girin.");
         }
     }
 
@@ -865,6 +909,7 @@
             alert("Lütfen silmek için listeden bir fon seçin.");
         }
     }
+    // --- FONKSİYON GÜNCELLEMELERİ BİTTİ ---
 </script>
 </body>
 </html>
