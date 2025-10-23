@@ -83,7 +83,7 @@
         #tracking-list-ul li:last-child { border-bottom: none; }
         #tracking-list-ul li.selected { background-color: #e0eafc; font-weight: bold; }
         
-        .tracking-buttons { display: flex; gap: 10px; margin-top: 10px; } /* GÜNCELLENDİ: margin-top eklendi */
+        .tracking-buttons { display: flex; gap: 10px; margin-top: 10px; }
         .tracking-buttons button { 
             flex: 1; 
             padding: 10px; 
@@ -99,12 +99,10 @@
         #btn-track-delete { background-color: #e74c3c; }
         #btn-track-delete:hover { background-color: #c0392b; }
         
-        /* --- YENİ EKLENDİ: Yeni Kaydet/İptal Buton Stilleri --- */
-        #btn-track-save { background-color: #2ecc71; } /* Yeşil Kaydet */
+        #btn-track-save { background-color: #2ecc71; }
         #btn-track-save:hover { background-color: #27ae60; }
-        #btn-track-cancel { background-color: #7f8c8d; } /* Gri İptal */
+        #btn-track-cancel { background-color: #7f8c8d; }
         #btn-track-cancel:hover { background-color: #5d6d7e; }
-        /* --- YENİ CSS BİTİŞİ --- */
     </style>
 </head>
 <body>
@@ -209,10 +207,17 @@
     let historicalChart = null;
     let isDeleteMode = false;
     let rankingInterval = null;
-    let selectedTrackedFundLi = null;
+    let selectedTrackedFundLi = null; 
+    
+    // YENİ EKLENDİ: localStorage için anahtar
+    const TRACKED_FUNDS_KEY = 'trackedFundsList';
 
     document.addEventListener('DOMContentLoaded', () => { 
         loadPortfolios(); 
+        
+        // YENİ EKLENDİ: Sayfa yüklendiğinde takip listesini depodan yükle
+        loadTrackedFundsFromStorage(); 
+        
         document.querySelectorAll('.back-button').forEach(button => {
             button.onclick = (e) => {
                 e.preventDefault();
@@ -227,15 +232,12 @@
         document.getElementById('portfolio-form').addEventListener('submit', handleCalculate);
         document.getElementById('btn-control').addEventListener('click', showControlPanel);
         
-        // --- YENİ EKLENDİ / GÜNCELLENDİ: Takip listesi butonları için listener'lar ---
-        document.getElementById('btn-track-add').addEventListener('click', showTrackAddForm); // Fonksiyon adı değişti
+        document.getElementById('btn-track-add').addEventListener('click', showTrackAddForm); 
         document.getElementById('btn-track-delete').addEventListener('click', deleteTrackedFund);
         document.getElementById('tracking-list-ul').addEventListener('click', selectTrackedFund);
         
-        // Yeni form butonları için listener'lar
         document.getElementById('btn-track-save').addEventListener('click', saveNewTrackedFund);
         document.getElementById('btn-track-cancel').addEventListener('click', hideTrackAddForm);
-        // --- GÜNCELLEME BİTİŞİ ---
     });
     
     function showControlPanel() {
@@ -844,28 +846,51 @@
         return table;
     }
 
-    // --- YENİ EKLENDİ / GÜNCELLENDİ: TAKİP LİSTESİ FONKSİYONLARI ---
+    // --- TAKİP LİSTESİ FONKSİYONLARI (localStorage ile güncellendi) ---
 
     /**
-     * YENİ EKLENDİ: "Fon Ekle" butonuna basınca formu gösterir
+     * YENİ EKLENDİ: Listedeki mevcut fonları localStorage'a kaydeder.
      */
+    function syncTrackedFundsToStorage() {
+        const liste = document.getElementById('tracking-list-ul');
+        const fundElements = liste.querySelectorAll('li');
+        const fundNames = Array.from(fundElements).map(li => li.textContent);
+        
+        localStorage.setItem(TRACKED_FUNDS_KEY, JSON.stringify(fundNames));
+    }
+
+    /**
+     * YENİ EKLENDİ: Sayfa yüklendiğinde fonları localStorage'dan çeker ve listeyi doldurur.
+     */
+    function loadTrackedFundsFromStorage() {
+        const savedFunds = localStorage.getItem(TRACKED_FUNDS_KEY);
+        if (savedFunds) {
+            const fundNames = JSON.parse(savedFunds);
+            const liste = document.getElementById('tracking-list-ul');
+            liste.innerHTML = ''; // Listeyi temizle
+            
+            fundNames.forEach(fonAdi => {
+                const newLi = document.createElement('li');
+                newLi.textContent = fonAdi;
+                liste.appendChild(newLi);
+            });
+        }
+    }
+
     function showTrackAddForm() {
         document.getElementById('tracking-main-buttons').style.display = 'none';
         document.getElementById('track-add-form').style.display = 'block';
         document.getElementById('track-new-fund-name').focus();
     }
 
-    /**
-     * YENİ EKLENDİ: "İptal" butonuna basınca formu gizler
-     */
     function hideTrackAddForm() {
         document.getElementById('track-add-form').style.display = 'none';
         document.getElementById('tracking-main-buttons').style.display = 'block';
-        document.getElementById('track-new-fund-name').value = ''; // Input'u temizle
+        document.getElementById('track-new-fund-name').value = ''; 
     }
 
     /**
-     * YENİ EKLENDİ: "Kaydet" butonuna basınca fonu listeye ekler
+     * GÜNCELLENDİ: Fonu kaydettikten sonra localStorage'ı günceller.
      */
     function saveNewTrackedFund() {
         const input = document.getElementById('track-new-fund-name');
@@ -877,39 +902,35 @@
             newLi.textContent = fonAdi;
             liste.appendChild(newLi);
             
-            hideTrackAddForm(); // Formu gizle ve temizle
+            hideTrackAddForm(); 
+            syncTrackedFundsToStorage(); // YENİ EKLENDİ: Değişikliği depoya kaydet
         } else {
             alert("Lütfen bir fon adı girin.");
         }
     }
 
-    /**
-     * "Takip Edilecek Fonlar" listesinden bir fona tıklandığında onu seçili hale getirir.
-     */
     function selectTrackedFund(event) {
         if (event.target.tagName === 'LI') {
-            // Önceki seçimi kaldır
             if (selectedTrackedFundLi) {
                 selectedTrackedFundLi.classList.remove('selected');
             }
-            // Yeni öğeyi seç
             selectedTrackedFundLi = event.target;
             selectedTrackedFundLi.classList.add('selected');
         }
     }
 
     /**
-     * "Takip Edilecek Fonlar" listesinden seçili olan fonu siler.
+     * GÜNCELLENDİ: Fonu sildikten sonra localStorage'ı günceller.
      */
     function deleteTrackedFund() {
         if (selectedTrackedFundLi) {
             selectedTrackedFundLi.remove(); 
-            selectedTrackedFundLi = null; // Seçimi temizle
+            selectedTrackedFundLi = null; 
+            syncTrackedFundsToStorage(); // YENİ EKLENDİ: Değişikliği depoya kaydet
         } else {
             alert("Lütfen silmek için listeden bir fon seçin.");
         }
     }
-    // --- FONKSİYON GÜNCELLEMELERİ BİTTİ ---
 </script>
 </body>
 </html>
