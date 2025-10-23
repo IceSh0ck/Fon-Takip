@@ -60,6 +60,45 @@
         .ranking-table tr:hover { background-color: #f4f7f9; }
         .ranking-table .fund-name { font-weight: bold; color: #2c3e50; }
         .ranking-table .fund-return { font-weight: bold; font-size: 1.1em; text-align: right; }
+
+        /* --- YENİ EKLENDİ: KONTROL PANELİ İKİLİ SÜTUN YERLEŞİMİ --- */
+        .control-panel-layout { display: flex; gap: 24px; }
+        .control-column-main { flex: 2; }
+        .control-column-aside { flex: 1; background-color: #f8f9fa; padding: 15px 20px; border-radius: 8px; align-self: flex-start; }
+        .control-column-aside h3 { margin-top: 0; border-bottom: 1px solid #e0e0e0; }
+        
+        #tracking-list-ul { 
+            list-style: none; 
+            padding: 0; 
+            margin: 15px 0; 
+            min-height: 250px; 
+            max-height: 400px;
+            overflow-y: auto;
+            border: 1px dashed #ccc; 
+            background-color: #fff;
+            padding: 10px; 
+            border-radius: 5px; 
+        }
+        #tracking-list-ul li { padding: 8px 10px; border-bottom: 1px solid #eee; cursor: pointer; }
+        #tracking-list-ul li:last-child { border-bottom: none; }
+        #tracking-list-ul li.selected { background-color: #e0eafc; font-weight: bold; }
+        
+        .tracking-buttons { display: flex; gap: 10px; }
+        .tracking-buttons button { 
+            flex: 1; 
+            padding: 10px; 
+            border: none; 
+            border-radius: 4px; 
+            color: white; 
+            cursor: pointer; 
+            font-weight: bold; 
+            font-size: 14px;
+        }
+        #btn-track-add { background-color: #3498db; }
+        #btn-track-add:hover { background-color: #2980b9; }
+        #btn-track-delete { background-color: #e74c3c; }
+        #btn-track-delete:hover { background-color: #c0392b; }
+        /* --- YENİ CSS BİTİŞİ --- */
     </style>
 </head>
 <body>
@@ -99,10 +138,25 @@
         </div>
         
         <div class="container" id="control-panel-container" style="display: none;">
-            <h2>Canlı Fon Getiri Sıralaması</h2>
-            <div id="ranking-timestamp"></div>
-            <div id="live-ranking-table">
-                <div class="loader"></div>
+            <div class="control-panel-layout">
+                
+                <div class="control-column-main">
+                    <h2>Canlı Fon Getiri Sıralaması</h2>
+                    <div id="ranking-timestamp"></div>
+                    <div id="live-ranking-table">
+                        <div class="loader"></div>
+                    </div>
+                </div>
+
+                <div class="control-column-aside">
+                    <h3>Takip Edilecek Fonlar</h3>
+                    <ul id="tracking-list-ul">
+                        </ul>
+                    <div class="tracking-buttons">
+                        <button id="btn-track-add">Fon Ekle</button>
+                        <button id="btn-track-delete">Fon Sil</button>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -140,6 +194,7 @@
     let historicalChart = null;
     let isDeleteMode = false;
     let rankingInterval = null;
+    let selectedTrackedFundLi = null; // YENİ EKLENDİ: Takip listesi için seçili öğe
 
     document.addEventListener('DOMContentLoaded', () => { 
         loadPortfolios(); 
@@ -156,6 +211,11 @@
         document.getElementById('btn-delete-mode').addEventListener('click', toggleDeleteMode);
         document.getElementById('portfolio-form').addEventListener('submit', handleCalculate);
         document.getElementById('btn-control').addEventListener('click', showControlPanel);
+        
+        // YENİ EKLENDİ: Takip listesi butonları için event listener'lar
+        document.getElementById('btn-track-add').addEventListener('click', addTrackedFund);
+        document.getElementById('btn-track-delete').addEventListener('click', deleteTrackedFund);
+        document.getElementById('tracking-list-ul').addEventListener('click', selectTrackedFund);
     });
     
     function showControlPanel() {
@@ -762,6 +822,48 @@
         });
         table += '</tbody></table>';
         return table;
+    }
+
+    // --- YENİ EKLENDİ: TAKİP LİSTESİ FONKSİYONLARI ---
+
+    /**
+     * "Takip Edilecek Fonlar" listesine yeni bir fon ekler.
+     */
+    function addTrackedFund() {
+        const fonAdi = prompt("Takip listesine eklenecek fonun adını girin:");
+        if (fonAdi && fonAdi.trim() !== "") {
+            const liste = document.getElementById('tracking-list-ul');
+            const newLi = document.createElement('li');
+            newLi.textContent = fonAdi.trim();
+            liste.appendChild(newLi);
+        }
+    }
+
+    /**
+     * "Takip Edilecek Fonlar" listesinden bir fona tıklandığında onu seçili hale getirir.
+     */
+    function selectTrackedFund(event) {
+        if (event.target.tagName === 'LI') {
+            // Önceki seçimi kaldır
+            if (selectedTrackedFundLi) {
+                selectedTrackedFundLi.classList.remove('selected');
+            }
+            // Yeni öğeyi seç
+            selectedTrackedFundLi = event.target;
+            selectedTrackedFundLi.classList.add('selected');
+        }
+    }
+
+    /**
+     * "Takip Edilecek Fonlar" listesinden seçili olan fonu siler.
+     */
+    function deleteTrackedFund() {
+        if (selectedTrackedFundLi) {
+            selectedTrackedFundLi.remove(); 
+            selectedTrackedFundLi = null; // Seçimi temizle
+        } else {
+            alert("Lütfen silmek için listeden bir fon seçin.");
+        }
     }
 </script>
 </body>
