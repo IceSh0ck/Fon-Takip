@@ -20,8 +20,21 @@ supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 def load_portfolios():
     """Supabase veritabanından tüm portföyleri yükler."""
     try:
+        # GÜNCELLENDİ: 'data' sütununa ek olarak 'name' sütununu da çekiyoruz.
+        # Bu, /get_portfolios'un data'yı (current) işlemesi için gerekli.
         response = supabase.table('portfolios').select('name, data').execute()
-        portfolios_dict = {row['name']: row['data'] for row in response.data}
+        
+        # 'data' alanı null olmayan veya geçerli bir 'current' anahtarı olanları filtrele
+        portfolios_dict = {}
+        for row in response.data:
+            if row.get('data') and row['data'].get('current'):
+                 portfolios_dict[row['name']] = row['data']
+            elif row.get('data') and 'stocks' in row['data']: # Eski yapı için geçici destek
+                print(f"Eski yapı tespit edildi: {row['name']}. 'current' içine taşınıyor...")
+                portfolios_dict[row['name']] = {'current': row['data'], 'history': []}
+            else:
+                print(f"Geçersiz veri yapısı atlanıyor: {row['name']}")
+
         return portfolios_dict
     except Exception as e:
         print(f"Supabase'den veri yüklenirken hata: {e}")
@@ -95,14 +108,45 @@ def index():
 
 @app.route('/get_portfolios', methods=['GET'])
 def get_portfolios():
+    """
+    GÜNCELLENDİ: Bu fonksiyon artık basit bir liste yerine,
+    JS'in hiyerarşik menü için ihtiyaç duyduğu bir obje listesi döndürür.
+    """
     portfolios = load_portfolios()
-    return jsonify(sorted(list(portfolios.keys())))
+    
+    # Yeni JS formatına uygun hale getir: [{name, fonTipi, altKategori}, ...]
+    portfolio_list = []
+    for name, data_container in portfolios.items():
+        # 'current' verisini al
+        current_data = data_container.get('current')
+        
+        if current_data:
+            portfolio_list.append({
+                # 'name' hem anahtarda hem de 'current' içinde var. 'current' içindekini tercih et.
+                'name': current_data.get('name', name), 
+                # Eski kayıtlarda bu alanlar 'None' (JSON'da null) olacak.
+                'fonTipi': current_data.get('fonTipi'), 
+                'altKategori': current_data.get('altKategori')
+            })
+        else:
+            # 'current' anahtarı olmayan (beklenmedik) bir durum varsa, en azından adı ekle
+             portfolio_list.append({
+                'name': name, 
+                'fonTipi': None, 
+                'altKategori': None
+            })
+
+    # İsim'e göre sırala
+    sorted_list = sorted(portfolio_list, key=lambda p: p['name'])
+    return jsonify(sorted_list)
+
 
 @app.route('/get_portfolio/<portfolio_name>', methods=['GET'])
 def get_portfolio(portfolio_name):
     portfolios = load_portfolios()
     portfolio_data = portfolios.get(portfolio_name)
     if portfolio_data and 'current' in portfolio_data:
+        # 'current' objesinin tamamını (fonTipi ve altKategori dahil) döndürür
         return jsonify(portfolio_data['current'])
     return jsonify({'error': 'Portföy bulunamadı'}), 404
 
@@ -110,6 +154,11 @@ def get_portfolio(portfolio_name):
 def save_portfolio():
     data = request.get_json()
     portfolio_name = data.get('name')
+    
+    # YENİ EKLENDİ: Kategori verilerini request'ten al
+    fonTipi = data.get('fonTipi')
+    altKategori = data.get('altKategori')
+    
     stocks = data.get('stocks', [])
     funds = data.get('funds', [])
     if not portfolio_name or (not stocks and not funds):
@@ -127,12 +176,21 @@ def save_portfolio():
         portfolio_container['history'].insert(0, previous_version)
         portfolio_container['history'] = portfolio_container['history'][:5]
 
-    new_current_version = {'name': portfolio_name, 'stocks': stocks, 'funds': funds}
+    # GÜNCELLENDİ: Kategori verilerini 'current' objesine ekle
+    new_current_version = {
+        'name': portfolio_name, 
+        'fonTipi': fonTipi,           # EKLENDİ
+        'altKategori': altKategori,   # EKLENDİ
+        'stocks': stocks, 
+        'funds': funds
+    }
+    
     portfolio_container['current'] = new_current_version
     portfolios[portfolio_name] = portfolio_container
     
     save_portfolios(portfolios)
     return jsonify({'success': f'"{portfolio_name}" portföyü başarıyla kaydedildi.'})
+
 
 @app.route('/calculate', methods=['POST'])
 def calculate():
@@ -172,7 +230,8 @@ def get_all_fund_returns():
     return jsonify(all_returns)
 
 
-# --- YENİ EKLENDİ: KONTROL PANELİ TAKİP LİSTESİ API'LERİ ---
+# --- KONTROL PANELİ TAKİP LİSTESİ API'LERİ ---
+# (Bu bölümde değişiklik yapılmadı)
 
 @app.route('/get_tracked_funds', methods=['GET'])
 def get_tracked_funds():
@@ -187,7 +246,6 @@ def get_tracked_funds():
         if response.data and response.data.get('value'):
             return jsonify(response.data['value'])
         else:
-            # Anahtar bulunamazsa (veya value null ise) boş liste döndür
             return jsonify([])
     except Exception as e:
         print(f"Takip listesi alınırken hata: {e}")
@@ -201,10 +259,9 @@ def save_tracked_funds():
         return jsonify({'error': 'Geçersiz veri formatı. Bir liste bekleniyordu.'}), 400
         
     try:
-        # upsert: 'tracked_funds' anahtarı varsa 'value' günceller, yoksa yeni bir satır oluşturur.
         supabase.table('control_panel_data') \
-                .upsert({'key': 'tracked_funds', 'value': fund_list}) \
-                .execute()
+               .upsert({'key': 'tracked_funds', 'value': fund_list}) \
+               .execute()
 
         return jsonify({'success': 'Takip listesi başarıyla güncellendi.'})
     except Exception as e:
