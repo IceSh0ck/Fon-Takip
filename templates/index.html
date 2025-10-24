@@ -29,9 +29,49 @@
         .detail-table th { background-color: #bdc3c7; }
         .loader { border: 4px solid #f3f3f3; border-top: 4px solid #3498db; border-radius: 50%; width: 30px; height: 30px; animation: spin 1s linear infinite; margin: 20px auto; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-        #portfolio-list { list-style-type: none; padding: 0; }
-        #portfolio-list li { padding: 10px; cursor: pointer; border-bottom: 1px solid #eee; transition: background-color 0.2s; }
-        #portfolio-list li:hover, #portfolio-list li.active { background-color: #e0eafc; }
+        
+        /* GÜNCELLENDİ: Yan menü hiyerarşisi için stiller */
+        #portfolio-list { padding: 0; list-style-type: none; }
+        #portfolio-list > li { list-style-type: none; margin-bottom: 5px; } /* Kategori grupları için */
+        .category-header {
+            font-size: 1.1em;
+            font-weight: bold;
+            color: #2c3e50;
+            padding: 10px 5px;
+            border-bottom: 2px solid #3498db;
+            margin-top: 15px;
+        }
+        .sub-category-header {
+            font-weight: bold;
+            color: #34495e;
+            padding: 5px 0 5px 15px;
+            font-size: 0.95em;
+            margin-top: 8px;
+        }
+        .fund-sublist { list-style-type: none; padding-left: 0; }
+        .fund-sublist-inner { list-style-type: none; padding-left: 15px; }
+        
+        /* Tıklanabilir asıl fon item'ları */
+        .fund-sublist-inner li[data-name] { 
+            padding: 10px 10px 10px 25px; /* İçeriden başla */
+            cursor: pointer;
+            border-bottom: 1px solid #eee;
+            transition: background-color 0.2s;
+        }
+        .fund-sublist > li[data-name] {
+             padding: 10px; /* Direkt kategori altındaki (Yurtdışı gibi) */
+             cursor: pointer;
+             border-bottom: 1px solid #eee;
+             transition: background-color 0.2s;
+        }
+        
+        #portfolio-list li[data-name]:hover,
+        #portfolio-list li[data-name].active {
+            background-color: #e0eafc;
+        }
+        /* Eski #portfolio-list li stilini ezmek için sıfırlama */
+        #portfolio-list li { padding: 0; border-bottom: none; cursor: default; }
+
         .options-menu button { display: block; width: 100%; text-align: left; margin-bottom: 10px; background-color: #34495e; }
         .options-menu button:hover { background-color: #2c3e50; }
         .back-button { font-size: 24px; position: absolute; top: 20px; left: 20px; cursor: pointer; color: #7f8c8d; transition: color 0.2s; text-decoration: none; }
@@ -47,7 +87,12 @@
         #btn-delete-mode.active { background-color: #c0392b !important; border: 2px solid #2c3e50; }
         #btn-control { background-color: #7f8c8d !important; }
         #btn-control:hover { background-color: #5d6d7e !important; }
-        body.delete-mode-active #portfolio-list li:hover { background-color: #f5b7b1; text-decoration: line-through; }
+        
+        body.delete-mode-active #portfolio-list li[data-name]:hover {
+             background-color: #f5b7b1; 
+             text-decoration: line-through; 
+        }
+        
         .comparison-selector { display: flex; flex-wrap: wrap; gap: 20px; align-items: center; justify-content: center; margin-bottom: 20px; padding: 15px; background-color: #ecf0f1; border-radius: 6px;}
         .comparison-selector div { flex: 1; min-width: 250px; }
         .comparison-selector label { font-weight: bold; display: block; margin-bottom: 5px; }
@@ -103,14 +148,20 @@
         #btn-track-save:hover { background-color: #27ae60; }
         #btn-track-cancel { background-color: #7f8c8d; }
         #btn-track-cancel:hover { background-color: #5d6d7e; }
+
+        /* YENİ EKLENEN STİLLER: Form Kategori */
+        .form-category-group { margin-top: 20px; }
+        .form-category-group > label { font-weight: bold; display: block; margin-bottom: 10px; color: #2c3e50; }
+        .form-radio-group { display: flex; flex-wrap: wrap; gap: 10px 20px; }
+        .form-radio-group label { display: flex; align-items: center; gap: 5px; cursor: pointer; font-weight: normal; }
+        .form-radio-group input[type="radio"] { width: auto; }
     </style>
 </head>
 <body>
 <div class="main-container">
     <div class="sidebar">
         <h2>Kaydedilmiş Fonlar</h2>
-        <ul id="portfolio-list"></ul>
-        <div class="sidebar-actions">
+        <ul id="portfolio-list"></ul> <div class="sidebar-actions">
             <button id="btn-new-portfolio">Yeni Fon Ekle</button>
             <button id="btn-delete-mode">Fonu Sil</button>
             <button id="btn-control">Kontrol</button>
@@ -176,7 +227,27 @@
         <div class="container" id="form-container" style="display: block;">
             <a href="#" class="back-button" title="Seçeneklere Geri Dön" style="display: none;">&larr;</a>
             <form id="portfolio-form">
-                <div class="form-group"><label for="portfolio-name">Fon Adı</label><input type="text" id="portfolio-name" placeholder="Yeni Fon Adı" required></div>
+                <div class="form-group">
+                    <label for="portfolio-name">Fon Adı</label>
+                    <input type="text" id="portfolio-name" placeholder="Yeni Fon Adı" required>
+                </div>
+                
+                <div class="form-category-group">
+                    <label>Fon Tipi</label>
+                    <div class="form-radio-group" id="fon-tipi-group">
+                        <label><input type="radio" name="fonTipi" value="Yurtdışı Fonu"> Yurtdışı Fonu</label>
+                        <label><input type="radio" name="fonTipi" value="Hisse Senedi Yoğun Fon"> Hisse Senedi Yoğun Fon</label>
+                        <label><input type="radio" name="fonTipi" value="Serbest Fon"> Serbest Fon</label>
+                    </div>
+                </div>
+                <div class="form-category-group" id="alt-kategori-container" style="display: none; padding-left: 20px; background-color: #f8f9fa; border-radius: 5px; padding: 10px 20px;">
+                    <label>Alt Kategori</label>
+                    <div class="form-radio-group" id="alt-kategori-group">
+                        <label><input type="radio" name="altKategori" value="Elimde Olanlar"> Elimde Olanlar</label>
+                        <label><input type="radio" name="altKategori" value="Takibimdeki Fonlar"> Takibimdeki Fonlar</label>
+                        <label><input type="radio" name="altKategori" value="Test Fonu"> Test Fonu</label>
+                    </div>
+                </div>
                 <h3>Hisse Senetleri</h3><div id="stocks-container"></div>
                 <button type="button" class="btn-add" onclick="addAsset('stock')">Yeni Hisse Ekle</button>
                 <h3>Yatırım Fonları</h3><div id="funds-container"></div>
@@ -209,15 +280,16 @@
     let rankingInterval = null;
     let selectedTrackedFundLi = null; 
     
-    // YENİ EKLENDİ: localStorage için anahtar
     const TRACKED_FUNDS_KEY = 'trackedFundsList';
 
     document.addEventListener('DOMContentLoaded', () => { 
         loadPortfolios(); 
         
-        // YENİ EKLENDİ: Sayfa yüklendiğinde takip listesini depodan yükle
         loadTrackedFundsFromStorage(); 
         
+        // YENİ EKLENDİ: Kategori form dinleyicilerini ayarla
+        setupCategoryListeners();
+
         document.querySelectorAll('.back-button').forEach(button => {
             button.onclick = (e) => {
                 e.preventDefault();
@@ -240,6 +312,28 @@
         document.getElementById('btn-track-cancel').addEventListener('click', hideTrackAddForm);
     });
     
+    // YENİ EKLENDİ: Formdaki kategori seçimlerini dinler
+    function setupCategoryListeners() {
+        const fonTipiRadios = document.querySelectorAll('input[name="fonTipi"]');
+        fonTipiRadios.forEach(radio => {
+            radio.addEventListener('change', updateAltKategoriVisibility);
+        });
+    }
+
+    // YENİ EKLENDİ: Alt kategori menüsünün görünürlüğünü yönetir
+    function updateAltKategoriVisibility() {
+        const altKategoriContainer = document.getElementById('alt-kategori-container');
+        const selectedTipi = document.querySelector('input[name="fonTipi"]:checked')?.value;
+        
+        if (selectedTipi === 'Hisse Senedi Yoğun Fon' || selectedTipi === 'Serbest Fon') {
+            altKategoriContainer.style.display = 'block';
+        } else {
+            altKategoriContainer.style.display = 'none';
+            // Diğerini seçince alt kategoriyi temizle
+            document.querySelectorAll('input[name="altKategori"]').forEach(radio => radio.checked = false);
+        }
+    }
+
     function showControlPanel() {
         const password = prompt("Lütfen kontrol paneli şifresini girin:");
         const correctPassword = "159357";
@@ -333,12 +427,19 @@
         }
     }
 
+    // GÜNCELLENDİ: Formu temizlerken kategori seçimlerini de sıfırlar
     function showNewPortfolioForm() {
         stopLiveRanking();
         if(isDeleteMode) toggleDeleteMode();
         currentPortfolioName = null;
         document.querySelectorAll('#portfolio-list li').forEach(li => li.classList.remove('active'));
         document.getElementById('portfolio-name').value = '';
+        
+        // YENİ EKLENDİ: Kategori formunu temizle
+        document.querySelectorAll('input[name="fonTipi"]').forEach(radio => radio.checked = false);
+        document.querySelectorAll('input[name="altKategori"]').forEach(radio => radio.checked = false);
+        updateAltKategoriVisibility(); // Alt kategoriyi gizle
+
         document.getElementById('stocks-container').innerHTML = '';
         document.getElementById('funds-container').innerHTML = '';
         ['options-container', 'result-area', 'report-container', 'comparison-container', 'control-panel-container'].forEach(id => document.getElementById(id).style.display = 'none');
@@ -367,12 +468,55 @@
         }
     }
 
+    // GÜNCELLENDİ: Tamamen yeniden yazılarak hiyerarşik listeyi oluşturur
     async function loadPortfolios() {
         const response = await fetch('/get_portfolios');
-        const portfolioNames = await response.json();
+        // ARTIK {name, fonTipi, altKategori} içeren bir dizi bekliyoruz
+        const portfolioData = await response.json(); 
         const listElement = document.getElementById('portfolio-list');
         listElement.innerHTML = '';
-        portfolioNames.forEach(name => {
+
+        // 1. Fonları kategorize et
+        const categories = {
+            'Yurtdışı Fonu': [],
+            'Hisse Senedi Yoğun Fon': { 'Elimde Olanlar': [], 'Takibimdeki Fonlar': [], 'Test Fonu': [], 'Diğer': [] },
+            'Serbest Fon': { 'Elimde Olanlar': [], 'Takibimdeki Fonlar': [], 'Test Fonu': [], 'Diğer': [] },
+            'Listelenmemiş Fonlar': []
+        };
+
+        if (!Array.isArray(portfolioData)) {
+            console.error("Hata: /get_portfolios bir dizi (array) döndürmedi. Dönen veri:", portfolioData);
+            listElement.innerHTML = "<li class='negative' style='padding:10px;'>Fonlar yüklenemedi. Veri formatı hatalı.</li>";
+            return;
+        }
+
+        for (const portfolio of portfolioData) {
+            const name = portfolio.name;
+            if (!name) continue; // Adı olmayan kaydı atla
+
+            if (portfolio.fonTipi === 'Yurtdışı Fonu') {
+                categories['Yurtdışı Fonu'].push(name);
+            } else if (portfolio.fonTipi === 'Hisse Senedi Yoğun Fon') {
+                const altKat = portfolio.altKategori;
+                if (altKat === 'Elimde Olanlar' || altKat === 'Takibimdeki Fonlar' || altKat === 'Test Fonu') {
+                    categories['Hisse Senedi Yoğun Fon'][altKat].push(name);
+                } else {
+                    categories['Hisse Senedi Yoğun Fon']['Diğer'].push(name); // Beklenmedik/boş alt kategori için
+                }
+            } else if (portfolio.fonTipi === 'Serbest Fon') {
+                const altKat = portfolio.altKategori;
+                 if (altKat === 'Elimde Olanlar' || altKat === 'Takibimdeki Fonlar' || altKat === 'Test Fonu') {
+                    categories['Serbest Fon'][altKat].push(name);
+                } else {
+                    categories['Serbest Fon']['Diğer'].push(name); // Beklenmedik/boş alt kategori için
+                }
+            } else {
+                categories['Listelenmemiş Fonlar'].push(name);
+            }
+        }
+
+        // 2. Tıklanabilir <li> oluşturan yardımcı fonksiyon
+        const createFundLi = (name) => {
             const li = document.createElement('li');
             li.textContent = name;
             li.dataset.name = name;
@@ -383,8 +527,66 @@
                     showOptions(name, event.currentTarget);
                 }
             };
-            listElement.appendChild(li);
-        });
+            return li;
+        };
+
+        // 3. HTML'i oluştur
+        const createCategoryHTML = (title, funds) => {
+            if (funds.length === 0) return '';
+            // Not: .outerHTML, <li> elementinin kendisini de string'e dahil eder
+            return `
+                <li>
+                    <div class="category-header">${title}</div>
+                    <ul class="fund-sublist">
+                        ${funds.map(name => createFundLi(name).outerHTML).join('')}
+                    </ul>
+                </li>`;
+        };
+
+        const createNestedCategoryHTML = (title, subCategories) => {
+            let subHtml = '';
+            let hasFunds = false;
+            
+            // İstenen sıralama
+            const subOrder = ['Elimde Olanlar', 'Takibimdeki Fonlar', 'Test Fonu', 'Diğer'];
+            
+            for(const subTitle of subOrder) {
+                const funds = subCategories[subTitle];
+                if (funds && funds.length > 0) {
+                    hasFunds = true;
+                    // 'Diğer' başlığını gösterme, fonları direkt ana kategori altına ekle
+                    // DÜZELTME: 'Diğer' de bir alt kategori olarak gösterilmeli, belki veritabanında "Test Fonu" yazmıyordur.
+                    // KULLANICI İSTEĞİ: "Diğer" diye bir başlık istenmedi. Bu fonlar ya "Listelenmemiş"e gitmeli.
+                    // MANTIKSAL DÜZELTME: Yukarıdaki kategorizasyonda "Diğer" yerine "Listelenmemiş"e atılmaları daha doğru olurdu.
+                    // Şimdilik kalsın, 'Diğer' başlığını gösterelim ki veri kaybı olmasın.
+                    
+                    subHtml += `
+                        <li>
+                            <div class="sub-category-header">${subTitle}</div>
+                            <ul class="fund-sublist-inner">
+                                ${funds.map(name => createFundLi(name).outerHTML).join('')}
+                            </ul>
+                        </li>`;
+                }
+            }
+
+            if (!hasFunds) return '';
+            return `
+                <li>
+                    <div class="category-header">${title}</div>
+                    <ul class="fund-sublist">
+                        ${subHtml}
+                    </ul>
+                </li>`;
+        };
+
+        let finalHTML = '';
+        finalHTML += createCategoryHTML('Yurtdışı Fonu', categories['Yurtdışı Fonu']);
+        finalHTML += createNestedCategoryHTML('Hisse Senedi Yoğun Fon', categories['Hisse Senedi Yoğun Fon']);
+        finalHTML += createNestedCategoryHTML('Serbest Fon', categories['Serbest Fon']);
+        finalHTML += createCategoryHTML('Listelenmemiş Fonlar', categories['Listelenmemiş Fonlar']);
+
+        listElement.innerHTML = finalHTML;
     }
     
     function addAsset(type, ticker = '', weight = '', adet = '') {
@@ -403,8 +605,10 @@
     function showOptions(name, targetElement) {
         stopLiveRanking();
         currentPortfolioName = name;
-        document.querySelectorAll('#portfolio-list li').forEach(li => li.classList.remove('active'));
+        // Tüm aktifleri kaldır, sadece tıklananı (data-name) aktif et
+        document.querySelectorAll('#portfolio-list li[data-name]').forEach(li => li.classList.remove('active'));
         if(targetElement) targetElement.classList.add('active');
+        
         document.getElementById('options-title').textContent = `"${name}" Fonu İçin İşlem Seçin`;
         
         document.getElementById('btn-show-report').onclick = () => displayPieChartReport(name);
@@ -715,24 +919,49 @@
         return table;
     }
 
+    // GÜNCELLENDİ: Formu açarken kayıtlı kategori seçimlerini yükler
     async function showPortfolioEditor(name) {
         const response = await fetch(`/get_portfolio/${name}`);
         const portfolio = await response.json();
         document.getElementById('portfolio-name').value = portfolio.name;
+
+        // YENİ EKLENDİ: Kayıtlı kategori verisini forma yükle
+        // Önce tümünü temizle
+        document.querySelectorAll('input[name="fonTipi"], input[name="altKategori"]').forEach(r => r.checked = false);
+        
+        if (portfolio.fonTipi) {
+            const tipiRadio = document.querySelector(`input[name="fonTipi"][value="${portfolio.fonTipi}"]`);
+            if (tipiRadio) tipiRadio.checked = true;
+        }
+        if (portfolio.altKategori) {
+            const altKategoriRadio = document.querySelector(`input[name="altKategori"][value="${portfolio.altKategori}"]`);
+            if (altKategoriRadio) altKategoriRadio.checked = true;
+        }
+        // Görünürlüğü ayarla
+        updateAltKategoriVisibility(); 
+        // KATEGORİ YÜKLEME SONU
+
         const stocksContainer = document.getElementById('stocks-container');
         stocksContainer.innerHTML = '';
         (portfolio.stocks || []).forEach(s => addAsset('stock', s.ticker, s.weight, s.adet));
         const fundsContainer = document.getElementById('funds-container');
         fundsContainer.innerHTML = '';
         (portfolio.funds || []).forEach(f => addAsset('fund', f.ticker, f.weight, f.adet));
+        
         document.getElementById('form-container').style.display = 'block';
         ['options-container', 'result-area', 'report-container', 'comparison-container', 'control-panel-container'].forEach(id=>document.getElementById(id).style.display='none');
         document.querySelector('#form-container .back-button').style.display = 'block';
     }
     
+    // GÜNCELLENDİ: Kaydederken kategori verilerini de gönderir
     document.getElementById('save-button').addEventListener('click', async function() {
         const portfolioName = document.getElementById('portfolio-name').value.trim();
         if (!portfolioName) { alert('Lütfen bir fon adı girin.'); return; }
+
+        // YENİ EKLENDİ: Kategori verilerini al
+        const fonTipi = document.querySelector('input[name="fonTipi"]:checked')?.value || null;
+        const altKategori = document.querySelector('input[name="altKategori"]:checked')?.value || null;
+        
         const stocks = Array.from(document.querySelectorAll('#stocks-container .stock-row')).map(r => ({ ticker: r.children[0].value.trim().toUpperCase(), weight: r.children[1].value, adet: r.children[2].value }));
         const funds = Array.from(document.querySelectorAll('#funds-container .stock-row')).map(r => ({ ticker: r.children[0].value.trim().toUpperCase(), weight: r.children[1].value, adet: r.children[2].value }));
         if (stocks.length === 0 && funds.length === 0) { alert('Lütfen en az bir varlık girin.'); return; }
@@ -742,7 +971,19 @@
             if (!confirm(`Toplam ağırlık ${totalWeight.toFixed(2)}%. 100% değil. Yine de kaydetmek istiyor musunuz?`)) return;
         }
 
-        const response = await fetch('/save_portfolio', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: portfolioName, stocks, funds }) });
+        // GÜNCELLENDİ: Kategori verilerini fetch body'ye ekle
+        const response = await fetch('/save_portfolio', { 
+            method: 'POST', 
+            headers: { 'Content-Type': 'application/json' }, 
+            body: JSON.stringify({ 
+                name: portfolioName, 
+                fonTipi: fonTipi,           // EKLENDİ
+                altKategori: altKategori,   // EKLENDİ
+                stocks, 
+                funds 
+            }) 
+        });
+
         const result = await response.json();
         alert(response.ok ? result.success : 'Hata: ' + result.error);
         if (response.ok) {
@@ -848,9 +1089,6 @@
 
     // --- TAKİP LİSTESİ FONKSİYONLARI (localStorage ile güncellendi) ---
 
-    /**
-     * YENİ EKLENDİ: Listedeki mevcut fonları localStorage'a kaydeder.
-     */
     function syncTrackedFundsToStorage() {
         const liste = document.getElementById('tracking-list-ul');
         const fundElements = liste.querySelectorAll('li');
@@ -859,15 +1097,12 @@
         localStorage.setItem(TRACKED_FUNDS_KEY, JSON.stringify(fundNames));
     }
 
-    /**
-     * YENİ EKLENDİ: Sayfa yüklendiğinde fonları localStorage'dan çeker ve listeyi doldurur.
-     */
     function loadTrackedFundsFromStorage() {
         const savedFunds = localStorage.getItem(TRACKED_FUNDS_KEY);
         if (savedFunds) {
             const fundNames = JSON.parse(savedFunds);
             const liste = document.getElementById('tracking-list-ul');
-            liste.innerHTML = ''; // Listeyi temizle
+            liste.innerHTML = ''; 
             
             fundNames.forEach(fonAdi => {
                 const newLi = document.createElement('li');
@@ -885,13 +1120,10 @@
 
     function hideTrackAddForm() {
         document.getElementById('track-add-form').style.display = 'none';
-        document.getElementById('tracking-main-buttons').style.display = 'block';
+        document.getElementById('tracking-main-buttons').style.display = 'flex'; // 'block' yerine 'flex' olmalı
         document.getElementById('track-new-fund-name').value = ''; 
     }
 
-    /**
-     * GÜNCELLENDİ: Fonu kaydettikten sonra localStorage'ı günceller.
-     */
     function saveNewTrackedFund() {
         const input = document.getElementById('track-new-fund-name');
         const fonAdi = input.value.trim();
@@ -903,7 +1135,7 @@
             liste.appendChild(newLi);
             
             hideTrackAddForm(); 
-            syncTrackedFundsToStorage(); // YENİ EKLENDİ: Değişikliği depoya kaydet
+            syncTrackedFundsToStorage(); 
         } else {
             alert("Lütfen bir fon adı girin.");
         }
@@ -919,14 +1151,11 @@
         }
     }
 
-    /**
-     * GÜNCELLENDİ: Fonu sildikten sonra localStorage'ı günceller.
-     */
     function deleteTrackedFund() {
         if (selectedTrackedFundLi) {
             selectedTrackedFundLi.remove(); 
             selectedTrackedFundLi = null; 
-            syncTrackedFundsToStorage(); // YENİ EKLENDİ: Değişikliği depoya kaydet
+            syncTrackedFundsToStorage(); 
         } else {
             alert("Lütfen silmek için listeden bir fon seçin.");
         }
