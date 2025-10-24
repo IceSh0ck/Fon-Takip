@@ -92,6 +92,10 @@
         #btn-delete-mode:hover { background-color: #c0392b !important; }
         #btn-delete-mode.active { background-color: #c0392b !important; border: 2px solid #2c3e50; }
         
+        /* YENİ: Canlı Sıralama Butonu Stili (Eski Kontrol butonu gibi) */
+        #btn-show-ranking { background-color: #7f8c8d !important; }
+        #btn-show-ranking:hover { background-color: #5d6d7e !important; }
+
         body.delete-mode-active #portfolio-list li[data-name]:hover {
              background-color: #f5b7b1; 
              text-decoration: line-through; 
@@ -166,17 +170,18 @@
 <div class="main-container">
     
     <div class="sidebar-left">
-        <h2><a href="#" id="home-link" style="text-decoration: none; color: inherit;">Kaydedilmiş Fonlar</a></h2>
+        <h2>Kaydedilmiş Fonlar</h2>
         <ul id="portfolio-list"></ul> 
         <div class="sidebar-actions">
             <button id="btn-new-portfolio">Yeni Fon Ekle</button>
             <button id="btn-delete-mode">Fonu Sil</button>
-            </div>
+            <button id="btn-show-ranking">Canlı Fon Getiri Sıralaması</button>
+        </div>
     </div>
     
     <div class="content-main">
         
-        <div class="container" id="live-ranking-container" style="display: block;">
+        <div class="container" id="live-ranking-container" style="display: none;">
             <h2>Canlı Fon Getiri Sıralaması</h2>
             <div id="ranking-timestamp"></div>
             <div id="live-ranking-table">
@@ -210,7 +215,7 @@
             </div>
         </div>
         
-        <div class="container" id="form-container" style="display: none;"> 
+        <div class="container" id="form-container" style="display: block;"> 
             <a href="#" class="back-button" title="Seçeneklere Geri Dön" style="display: none;">&larr;</a>
             <form id="portfolio-form">
                 <div class="form-group">
@@ -297,17 +302,13 @@
         loadTrackedFundsFromStorage(); 
         setupCategoryListeners();
         
-        // YENİ: Ana sayfaya (sıralama) dönme
-        document.getElementById('home-link').addEventListener('click', (e) => {
-            e.preventDefault();
-            showLiveRankingScreen();
-        });
+        // KALDIRILDI: Ana sayfa linki
+        // document.getElementById('home-link').addEventListener('click', ...);
         
-        // YENİ: Canlı sıralamayı sayfa yüklenince başlat
-        startLiveRanking();
+        // KALDIRILDI: Canlı sıralama artık sayfa yüklenince başlamıyor
+        // startLiveRanking();
 
         // YENİ EKLENDİ: Olay delegasyonu (Event Delegation)
-        // 'onclick'in .innerHTML ile kaybolması sorununu çözer
         document.getElementById('portfolio-list').addEventListener('click', handlePortfolioListClick);
 
         document.querySelectorAll('.back-button').forEach(button => {
@@ -321,10 +322,11 @@
         });
         document.getElementById('btn-new-portfolio').addEventListener('click', showNewPortfolioForm);
         document.getElementById('btn-delete-mode').addEventListener('click', toggleDeleteMode);
-        document.getElementById('portfolio-form').addEventListener('submit', handleCalculate);
         
-        // KONTROL PANELİ SİLİNDİ
-        // document.getElementById('btn-control').addEventListener('click', showControlPanel);
+        // YENİ: Canlı Sıralama butonu eklendi
+        document.getElementById('btn-show-ranking').addEventListener('click', showLiveRankingScreen);
+        
+        document.getElementById('portfolio-form').addEventListener('submit', handleCalculate);
         
         document.getElementById('btn-track-add').addEventListener('click', showTrackAddForm); 
         document.getElementById('btn-track-delete').addEventListener('click', deleteTrackedFund);
@@ -335,29 +337,26 @@
     });
 
     /**
-     * YENİ EKLENDİ: Portföy listesindeki tıklamaları yönetir (Olay Delegasyonu).
+     * Portföy listesindeki tıklamaları yönetir (Olay Delegasyonu).
      */
     function handlePortfolioListClick(event) {
-        // Tıklanan en yakın 'li[data-name]' öğesini bul (bu, 'li'nin kendisine veya içindeki metne tıklanmış olabilir)
         const targetLi = event.target.closest('li[data-name]');
         
-        // Eğer tıklanabilir bir fon 'li'si bulunamadıysa (örn: başlığa veya boşluğa tıklandı), dur.
         if (!targetLi) {
             return;
         }
 
         const name = targetLi.dataset.name;
 
-        // Silme modundaysa sil, değilse seçenekleri göster
         if (isDeleteMode) {
             deletePortfolio(name);
         } else {
-            showOptions(name, targetLi); // 'targetLi'yi aktif olarak ayarlaması için gönder
+            showOptions(name, targetLi); 
         }
     }
     
     /**
-     * YENİ EKLENDİ: Ana Canlı Sıralama ekranını gösterir.
+     * YENİ: Artık ana ekran değil, butonla çağrılan bir fonksiyon
      */
     function showLiveRankingScreen() {
         // Tüm ana içerik konteynerlerini gizle
@@ -395,9 +394,6 @@
         }
     }
 
-    // KONTROL PANELİ İŞLEVLERİ TAMAMEN KALDIRILDI
-    // function showControlPanel() { ... }
-
     function startLiveRanking() {
         stopLiveRanking(); 
         fetchAndRenderRankings();
@@ -412,29 +408,25 @@
     }
 
     /**
-     * YENİDEN YAZILDI: Canlı sıralamayı çeker, KATEGORİLERE GÖRE GRUPLAR ve render eder.
+     * Canlı sıralamayı çeker, KATEGORİLERE GÖRE GRUPLAR ve render eder.
      */
     async function fetchAndRenderRankings() {
         const container = document.getElementById('live-ranking-table');
         const timestampContainer = document.getElementById('ranking-timestamp');
         
-        // Yükleniyor animasyonunu ilk başta göster (eğer tablo boşsa)
         if (!container.innerHTML || container.innerHTML.includes('loader')) {
              container.innerHTML = '<div class="loader"></div>';
         }
 
         try {
-            // 1. Her iki API'yi de aynı anda çağır
             const [returnsResponse, portfoliosResponse] = await Promise.all([
                 fetch('/get_all_fund_returns'),
                 fetch('/get_portfolios')
             ]);
 
-            // 2. JSON verilerini al
             const returnsData = await returnsResponse.json();
             const portfolioData = await portfoliosResponse.json();
 
-            // 3. Hata kontrolü
             if (!returnsResponse.ok) {
                 throw new Error(returnsData.error || 'Getiri verisi alınamadı.');
             }
@@ -445,24 +437,20 @@
                 throw new Error('Sunucudan hatalı formatta veri döndü.');
             }
 
-            // 4. Portföy verilerini hızlı erişim için bir Map'e dönüştür
             const portfolioMap = new Map(portfolioData.map(p => 
                 [p.name, { fonTipi: p.fonTipi, altKategori: p.altKategori }]
             ));
 
-            // 5. Getiri verilerini kategori verileriyle BİRLEŞTİR
             const mergedData = returnsData.map(fund => {
                 const categories = portfolioMap.get(fund.name) || {};
                 return {
-                    ...fund, // {name: 'DKR', return: 4.32}
-                    ...categories // {fonTipi: '...', altKategori: '...'}
+                    ...fund, 
+                    ...categories 
                 };
             });
             
-            // 6. Verileri getiriye göre BÜYÜKTEN KÜÇÜĞE SIRALA
             mergedData.sort((a, b) => b.return - a.return);
 
-            // 7. Verileri 'loadPortfolios' fonksiyonundaki gibi KATEGORİZE ET
             const categories = {
                 'Yurtdışı Fonu': [],
                 'Hisse Senedi Yoğun Fon': { 'Elimde Olanlar': [], 'Takibimdeki Fonlar': [], 'Test Fonu': [], 'Diğer': [] },
@@ -493,16 +481,12 @@
                 }
             }
 
-            // 8. Gruplanmış HTML'i OLUŞTUR
-            
-            // Tek bir fon satırı oluşturan yardımcı fonksiyon
             const createFundRowHTML = (fund) => {
                 const returnClass = fund.return > 0 ? 'positive' : fund.return < 0 ? 'negative' : '';
                 const returnSign = fund.return > 0 ? '+' : '';
                 const fundName = fund.name || 'Bilinmeyen Fon';
                 const fundReturn = fund.return ?? 0;
                 
-                // Takip listesindeki fonları işaretle
                 const trackedFunds = JSON.parse(localStorage.getItem(TRACKED_FUNDS_KEY) || '[]');
                 const isTracked = trackedFunds.includes(fundName);
                 const tag = isTracked ? ' - Takip' : '';
@@ -515,7 +499,6 @@
                 `;
             };
 
-            // Bir grup fon için tam tabloyu oluşturan yardımcı fonksiyon
             const createTableHTML = (funds) => {
                 if (funds.length === 0) return '';
                 return `
@@ -533,7 +516,6 @@
                 `;
             };
 
-            // Düz kategori (Yurtdışı) için HTML oluşturan fonksiyon
             const createRankingCategoryHTML = (title, funds) => {
                 if (funds.length === 0) return '';
                 return `
@@ -542,7 +524,6 @@
                 `;
             };
 
-            // Alt kategorili (Hisse Senedi, Serbest) için HTML oluşturan fonksiyon
             const createRankingNestedCategoryHTML = (title, subCategories) => {
                 let subHtml = '';
                 let hasFunds = false;
@@ -567,7 +548,6 @@
                 `;
             };
 
-            // Tüm HTML'i birleştir
             let finalHTML = '';
             finalHTML += createRankingCategoryHTML('Yurtdışı Fonu', categories['Yurtdışı Fonu']);
             finalHTML += createRankingNestedCategoryHTML('Hisse Senedi Yoğun Fon', categories['Hisse Senedi Yoğun Fon']);
@@ -580,7 +560,6 @@
 
             container.innerHTML = finalHTML;
             
-            // 9. Zaman damgasını güncelle
             const now = new Date();
             timestampContainer.textContent = `Son Güncelleme: ${now.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}`;
 
@@ -596,24 +575,23 @@
         const deleteButton = document.getElementById('btn-delete-mode');
         const body = document.body;
         if (isDeleteMode) {
-            stopLiveRanking(); // YENİ: Sıralamayı durdur
+            stopLiveRanking(); 
             deleteButton.classList.add('active');
             deleteButton.textContent = 'Silme Modundan Çık';
             body.classList.add('delete-mode-active');
-            // GÜNCELLENDİ: 'control-panel-container' kaldırıldı, 'live-ranking-container' eklendi
             ['options-container', 'form-container', 'result-area', 'report-container', 'comparison-container', 'live-ranking-container'].forEach(id => document.getElementById(id).style.display = 'none');
             alert('Silme modu aktif. Silmek istediğiniz fonu listeden seçin.');
         } else {
             deleteButton.classList.remove('active');
             deleteButton.textContent = 'Fonu Sil';
             body.classList.remove('delete-mode-active');
-            // YENİ: Silme modundan çıkınca ana sıralamayı göster
-            showLiveRankingScreen();
+            // GÜNCELLENDİ: Silme modundan çıkınca ana forma dön
+            showNewPortfolioForm();
         }
     }
 
     function showNewPortfolioForm() {
-        stopLiveRanking(); // YENİ: Sıralamayı durdur
+        stopLiveRanking(); // Sıralamayı durdur
         if(isDeleteMode) toggleDeleteMode();
         currentPortfolioName = null;
         document.querySelectorAll('#portfolio-list li[data-name]').forEach(li => li.classList.remove('active'));
@@ -625,7 +603,6 @@
 
         document.getElementById('stocks-container').innerHTML = '';
         document.getElementById('funds-container').innerHTML = '';
-        // GÜNCELLENDİ: 'control-panel-container' kaldırıldı, 'live-ranking-container' eklendi
         ['options-container', 'result-area', 'report-container', 'comparison-container', 'live-ranking-container'].forEach(id => document.getElementById(id).style.display = 'none');
         document.getElementById('form-container').style.display = 'block';
         document.querySelector('#form-container .back-button').style.display = 'none';
@@ -644,8 +621,8 @@
                 if (response.ok) {
                     alert(result.success);
                     loadPortfolios();
-                    // YENİ: Fon silindikten sonra form yerine ana sıralamayı göster
-                    showLiveRankingScreen(); 
+                    // GÜNCELLENDİ: Fon silindikten sonra ana forma dön
+                    showNewPortfolioForm(); 
                 } else { throw new Error(result.error); }
             } catch (error) {
                 alert('Fon silinirken bir hata oluştu: ' + error.message);
@@ -697,13 +674,10 @@
             }
         }
 
-        // GÜNCELLENDİ: Bu fonksiyon artık 'onclick' İÇERMİYOR.
-        // Sadece statik HTML oluşturur. Tıklamalar 'handlePortfolioListClick' tarafından yönetilir.
         const createFundLi = (name) => {
             const li = document.createElement('li');
             li.textContent = name;
             li.dataset.name = name;
-            // .onclick handler'ı buradan kaldırıldı.
             return li;
         };
 
@@ -772,7 +746,7 @@
     }
 
     function showOptions(name, targetElement) {
-        stopLiveRanking(); // YENİ: Sıralamayı durdur
+        stopLiveRanking(); // Sıralamayı durdur
         currentPortfolioName = name;
         
         document.querySelectorAll('#portfolio-list li[data-name]').forEach(li => li.classList.remove('active'));
@@ -786,7 +760,6 @@
         document.getElementById('btn-edit-portfolio').onclick = () => showPortfolioEditor(name);
         document.getElementById('btn-show-simulation').onclick = () => displayDynamicWeightSimulation(name);
 
-        // GÜNCELLENDİ: 'control-panel-container' kaldırıldı, 'live-ranking-container' eklendi
         ['form-container', 'result-area', 'report-container', 'comparison-container', 'live-ranking-container'].forEach(id => document.getElementById(id).style.display = 'none');
         document.getElementById('options-container').style.display = 'block';
 
@@ -836,12 +809,10 @@
         if(portfolioChart) { portfolioChart.destroy(); }
         portfolioChart = new Chart(ctx, { type: 'pie', data: { labels: labels, datasets: [{ label: 'Fon Ağırlığı (%)', data: data, backgroundColor: generateDeterministicColors(labels), borderColor: '#fff', borderWidth: 1 }] }, options: { responsive: true, plugins: { legend: { position: 'top' }, tooltip: { callbacks: { label: (context) => `${context.label}: ${context.raw.toFixed(2)}%` } } } } });
         document.getElementById('report-container').style.display = 'block';
-        // GÜNCELLENDİ
         ['options-container', 'form-container', 'result-area', 'comparison-container', 'live-ranking-container'].forEach(id => document.getElementById(id).style.display = 'none');
     }
 
     async function displayWeightChangeReport(name) {
-        // GÜNCELLENDİ
         ['options-container', 'report-container', 'form-container', 'result-area', 'live-ranking-container'].forEach(id => document.getElementById(id).style.display = 'none');
         const container = document.getElementById('comparison-container');
         const tableContainer = document.getElementById('comparison-table-container');
@@ -1116,7 +1087,6 @@
         (portfolio.funds || []).forEach(f => addAsset('fund', f.ticker, f.weight, f.adet));
         
         document.getElementById('form-container').style.display = 'block';
-        // GÜNCELLENDİ
         ['options-container', 'result-area', 'report-container', 'comparison-container', 'live-ranking-container'].forEach(id=>document.getElementById(id).style.display='none');
         document.querySelector('#form-container .back-button').style.display = 'block';
     }
@@ -1153,8 +1123,8 @@
         alert(response.ok ? result.success : 'Hata: ' + result.error);
         if (response.ok) {
             loadPortfolios();
-            // YENİ: Kayıttan sonra form yerine ana sıralamayı göster
-            showLiveRankingScreen(); 
+            // GÜNCELLENDİ: Kayıttan sonra ana forma dön
+            showNewPortfolioForm(); 
         }
     });
 
@@ -1171,7 +1141,6 @@
     }
 
     function showResultArea(isLoading) {
-        // GÜNCELLENDİ
         ['options-container', 'report-container', 'form-container', 'comparison-container', 'live-ranking-container'].forEach(id => document.getElementById(id).style.display = 'none');
         document.getElementById('result-area').style.display = 'block';
         
@@ -1263,7 +1232,6 @@
         
         localStorage.setItem(TRACKED_FUNDS_KEY, JSON.stringify(fundNames));
         
-        // YENİ: Takip listesi değiştiğinde, canlı sıralamayı yenile (işaretler güncellensin)
         if (rankingInterval) {
             fetchAndRenderRankings();
         }
@@ -1298,12 +1266,11 @@
 
     function saveNewTrackedFund() {
         const input = document.getElementById('track-new-fund-name');
-        const fonAdi = input.value.trim().toUpperCase(); // YENİ: Tutarlılık için büyük harf
+        const fonAdi = input.value.trim().toUpperCase(); 
         
         if (fonAdi !== "") {
             const liste = document.getElementById('tracking-list-ul');
             
-            // YENİ: Zaten var mı diye kontrol et
             const existing = Array.from(liste.querySelectorAll('li')).some(li => li.textContent === fonAdi);
             if (existing) {
                 alert("Bu fon zaten takip listenizde.");
