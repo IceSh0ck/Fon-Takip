@@ -28,7 +28,7 @@ def load_portfolios():
         portfolios_dict = {}
         for row in response.data:
             if row.get('data') and row['data'].get('current'):
-                 portfolios_dict[row['name']] = row['data']
+                portfolios_dict[row['name']] = row['data']
             elif row.get('data') and 'stocks' in row['data']: # Eski yapı için geçici destek
                 print(f"Eski yapı tespit edildi: {row['name']}. 'current' içine taşınıyor...")
                 portfolios_dict[row['name']] = {'current': row['data'], 'history': []}
@@ -114,7 +114,7 @@ def get_portfolios():
     """
     portfolios = load_portfolios()
     
-    # Yeni JS formatına uygun hale getir: [{name, fonTipi, altKategori}, ...]
+    # Yeni JS formatına uygun hale getir: [{name, fonTipi, altKategori, yonetim_tipi}, ...]
     portfolio_list = []
     for name, data_container in portfolios.items():
         # 'current' verisini al
@@ -126,14 +126,16 @@ def get_portfolios():
                 'name': current_data.get('name', name), 
                 # Eski kayıtlarda bu alanlar 'None' (JSON'da null) olacak.
                 'fonTipi': current_data.get('fonTipi'), 
-                'altKategori': current_data.get('altKategori')
+                'altKategori': current_data.get('altKategori'),
+                'yonetim_tipi': current_data.get('yonetim_tipi') # YENİ EKLENDİ (A/P)
             })
         else:
             # 'current' anahtarı olmayan (beklenmedik) bir durum varsa, en azından adı ekle
              portfolio_list.append({
                 'name': name, 
                 'fonTipi': None, 
-                'altKategori': None
+                'altKategori': None,
+                'yonetim_tipi': None # YENİ EKLENDİ (A/P)
             })
 
     # İsim'e göre sırala
@@ -146,18 +148,23 @@ def get_portfolio(portfolio_name):
     portfolios = load_portfolios()
     portfolio_data = portfolios.get(portfolio_name)
     if portfolio_data and 'current' in portfolio_data:
-        # 'current' objesinin tamamını (fonTipi ve altKategori dahil) döndürür
+        # 'current' objesinin tamamını (fonTipi, altKategori ve yonetim_tipi dahil) döndürür
         return jsonify(portfolio_data['current'])
     return jsonify({'error': 'Portföy bulunamadı'}), 404
 
 @app.route('/save_portfolio', methods=['POST'])
 def save_portfolio():
-    data = request.get_json()
+    # HATA DÜZELTMESİ: silent=True eklendi
+    data = request.get_json(silent=True)
+    if data is None:
+        return jsonify({'error': 'Geçersiz istek. JSON verisi veya Content-Type başlığı eksik.'}), 400
+
     portfolio_name = data.get('name')
     
-    # YENİ EKLENDİ: Kategori verilerini request'ten al
+    # YENİ EKLENDİ: Kategori ve Yönetim Tipi verilerini request'ten al
     fonTipi = data.get('fonTipi')
     altKategori = data.get('altKategori')
+    yonetim_tipi = data.get('yonetim_tipi') # YENİ EKLENDİ (A/P)
     
     stocks = data.get('stocks', [])
     funds = data.get('funds', [])
@@ -176,11 +183,12 @@ def save_portfolio():
         portfolio_container['history'].insert(0, previous_version)
         portfolio_container['history'] = portfolio_container['history'][:5]
 
-    # GÜNCELLENDİ: Kategori verilerini 'current' objesine ekle
+    # GÜNCELLENDİ: Kategori ve Yönetim Tipi verilerini 'current' objesine ekle
     new_current_version = {
         'name': portfolio_name, 
         'fonTipi': fonTipi,           # EKLENDİ
         'altKategori': altKategori,   # EKLENDİ
+        'yonetim_tipi': yonetim_tipi, # YENİ EKLENDİ (A/P)
         'stocks': stocks, 
         'funds': funds
     }
@@ -194,7 +202,11 @@ def save_portfolio():
 
 @app.route('/calculate', methods=['POST'])
 def calculate():
-    data = request.get_json()
+    # HATA DÜZELTMESİ: silent=True eklendi
+    data = request.get_json(silent=True)
+    if data is None:
+        return jsonify({'error': 'Geçersiz istek. JSON verisi veya Content-Type başlığı eksik.'}), 400
+        
     stocks = data.get('stocks', [])
     funds = data.get('funds', [])
     if not stocks and not funds: 
@@ -238,10 +250,10 @@ def get_tracked_funds():
     """Kontrol panelindeki takip listesini Supabase'den çeker."""
     try:
         response = supabase.table('control_panel_data') \
-                         .select('value') \
-                         .eq('key', 'tracked_funds') \
-                         .maybe_single() \
-                         .execute()
+                           .select('value') \
+                           .eq('key', 'tracked_funds') \
+                           .maybe_single() \
+                           .execute()
         
         if response.data and response.data.get('value'):
             return jsonify(response.data['value'])
@@ -254,14 +266,15 @@ def get_tracked_funds():
 @app.route('/save_tracked_funds', methods=['POST'])
 def save_tracked_funds():
     """Kontrol panelindeki takip listesini Supabase'e kaydeder/günceller."""
-    fund_list = request.get_json()
+    # HATA DÜZELTMESİ: silent=True eklendi
+    fund_list = request.get_json(silent=True)
     if not isinstance(fund_list, list):
         return jsonify({'error': 'Geçersiz veri formatı. Bir liste bekleniyordu.'}), 400
         
     try:
         supabase.table('control_panel_data') \
-               .upsert({'key': 'tracked_funds', 'value': fund_list}) \
-               .execute()
+                .upsert({'key': 'tracked_funds', 'value': fund_list}) \
+                .execute()
 
         return jsonify({'success': 'Takip listesi başarıyla güncellendi.'})
     except Exception as e:
@@ -353,21 +366,29 @@ def revert_portfolio(portfolio_name):
 
 @app.route('/delete_portfolio', methods=['POST'])
 def delete_portfolio():
-    data = request.get_json()
+    # HATA DÜZELTMESİ: silent=True eklendi
+    data = request.get_json(silent=True)
+    if data is None:
+         return jsonify({'error': 'Geçersiz istek. JSON verisi veya Content-Type başlığı eksik.'}), 400
+         
     portfolio_name_to_delete = data.get('name')
     if not portfolio_name_to_delete: return jsonify({'error': 'Silinecek portföy adı belirtilmedi.'}), 400
     
     portfolios = load_portfolios()
     if portfolio_name_to_delete in portfolios:
         del portfolios[portfolio_name_to_delete]
-        save_portfolios(portfolios)
+        save_portfolios(portfolios) # Bu fonksiyonun içinde zaten try/except var
         return jsonify({'success': f'"{portfolio_name_to_delete}" portföyü başarıyla silindi.'})
     else:
         return jsonify({'error': 'Silinecek portföy bulunamadı.'}), 404
 
 @app.route('/calculate_dynamic_weights', methods=['POST'])
 def calculate_dynamic_weights():
-    data = request.get_json()
+    # HATA DÜZELTMESİ: silent=True eklendi
+    data = request.get_json(silent=True)
+    if data is None:
+        return jsonify({'error': 'Geçersiz istek. JSON verisi veya Content-Type başlığı eksik.'}), 400
+        
     stocks = data.get('stocks', [])
     funds = data.get('funds', [])
     if not stocks and not funds:
@@ -411,7 +432,7 @@ def calculate_dynamic_weights():
             total_portfolio_value += market_value
         except Exception as e:
             print(f"Fiyat alınamadı ({fund_code}): {e}")
-            asset_market_values.append({'type': 'fund', 'ticker': fund_code, 'adet': adet, 'market_value': 0, 'data': None, 'error': 'Fiyat alınamadı'})
+            asset_m_values.append({'type': 'fund', 'ticker': fund_code, 'adet': adet, 'market_value': 0, 'data': None, 'error': 'Fiyat alınamadı'})
 
     if total_portfolio_value == 0:
         return jsonify({'error': 'Portföy toplam değeri sıfır. Adetleri veya varlık kodlarını kontrol edin.'}), 400
