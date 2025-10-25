@@ -58,7 +58,6 @@
         .fund-sublist { list-style-type: none; padding-left: 0; }
         .fund-sublist-inner { list-style-type: none; padding-left: 15px; }
         
-        /* DÜZELTME (A/P Etiketi için Flexbox eklendi) */
         .fund-sublist-inner li[data-name] { 
             display: flex;
             justify-content: space-between;
@@ -68,7 +67,6 @@
             border-bottom: 1px solid #eee;
             transition: background-color 0.2s;
         }
-        /* DÜZELTME (A/P Etiketi için Flexbox eklendi) */
         .fund-sublist > li[data-name] { 
              display: flex;
              justify-content: space-between;
@@ -100,7 +98,6 @@
         #btn-delete-mode:hover { background-color: #c0392b !important; }
         #btn-delete-mode.active { background-color: #c0392b !important; border: 2px solid #2c3e50; }
         
-        /* YENİ: Canlı Sıralama Butonu Stili (Eski Kontrol butonu gibi) */
         #btn-show-ranking { background-color: #7f8c8d !important; }
         #btn-show-ranking:hover { background-color: #5d6d7e !important; }
 
@@ -121,7 +118,6 @@
         .ranking-table tr:hover { background-color: #f4f7f9; }
         .ranking-table .fund-name { font-weight: bold; color: #2c3e50; }
         .ranking-table .fund-return { font-weight: bold; font-size: 1.1em; text-align: right; }
-        /* Canlı Sıralama Kategori Başlıkları (Sidebar'dakilerle aynı) */
         .ranking-category-header { font-size: 1.3em; font-weight: bold; color: #2c3e50; padding: 15px 5px; border-bottom: 2px solid #3498db; margin-top: 25px; }
         .ranking-sub-category-header { font-weight: bold; color: #34495e; padding: 10px 0 5px 15px; font-size: 1.1em; margin-top: 10px; }
 
@@ -173,21 +169,21 @@
         .form-radio-group label { display: flex; align-items: center; gap: 5px; cursor: pointer; font-weight: normal; }
         .form-radio-group input[type="radio"] { width: auto; }
 
-        /* YENİ EKLENDİ (Sol Listedeki A/P Etiketi) */
+        /* Sol Listedeki A/P Etiketi */
         .yonetim-etiket {
             font-weight: bold;
             font-size: 0.85em;
             padding: 2px 6px;
             border-radius: 4px;
             color: white;
-            margin-left: 8px; /* İsimden sonraki boşluk */
-            flex-shrink: 0; /* Küçülmesin */
+            margin-left: 8px;
+            flex-shrink: 0;
         }
         .yonetim-etiket.aktif { background-color: #28a745; }
         .yonetim-etiket.pasif { background-color: #dc3545; }
 
 
-        /* YENİ EKLENDİ (Formdaki Yönetim Şekli Stilleri) */
+        /* Formdaki Yönetim Şekli Stilleri */
         .yonetim-secenek-btn {
             display: flex;
             align-items: center;
@@ -198,20 +194,18 @@
             cursor: pointer;
             transition: all 0.2s ease;
             background-color: #fff;
-            flex-grow: 1; /* Eşit genişlesinler */
+            flex-grow: 1;
             justify-content: center;
         }
         .yonetim-secenek-btn:hover {
             background-color: #f8f9fa;
             border-color: #ccc;
         }
-        /* Seçili olanı vurgula */
         .yonetim-secenek-btn.selected {
             border-color: #3498db;
             background-color: #eaf5fc;
             box-shadow: 0 0 8px rgba(52, 152, 219, 0.3);
         }
-        /* A ve P kutucukları */
         .yonetim-btn-kutu {
             border: none;
             color: white;
@@ -224,7 +218,6 @@
         }
         .yonetim-btn-kutu.aktif { background-color: #28a745; }
         .yonetim-btn-kutu.pasif { background-color: #dc3545; }
-        /* --- STİL DEĞİŞİKLİKLERİ SONU --- */
 
     </style>
 </head>
@@ -292,8 +285,9 @@
                         <label><input type="radio" name="fonTipi" value="Hisse Senedi Yoğun Fon"> Hisse Senedi Yoğun Fon</label>
                         <label><input type="radio" name="fonTipi" value="Serbest Fon"> Serbest Fon</label>
                         <label><input type="radio" name="fonTipi" value="Kâr Payı Ödeyen"> Kâr Payı Ödeyen</label>
-                        </div>
+                    </div>
                 </div>
+
                 <div class="form-category-group" id="alt-kategori-container" style="display: none; padding-left: 20px; background-color: #f8f9fa; border-radius: 5px; padding: 10px 20px;">
                     <label>Alt Kategori</label>
                     <div class="form-radio-group" id="alt-kategori-group">
@@ -318,6 +312,7 @@
                         </div>
                     </div>
                 </div>
+
                 <h3>Hisse Senetleri</h3><div id="stocks-container"></div>
                 <button type="button" class="btn-add" onclick="addAsset('stock')">Yeni Hisse Ekle</button>
                 <h3>Yatırım Fonları</h3><div id="funds-container"></div>
@@ -376,33 +371,30 @@
     const TRACKED_FUNDS_KEY = 'trackedFundsList';
 
     document.addEventListener('DOMContentLoaded', () => { 
+        // DİKKAT: loadPortfolios() artık HATA YAKALIYOR
+        // Bu sayede çökse bile aşağıdaki kodlar (A/P butonları) çalışmaya devam edecek.
         loadPortfolios(); 
+        
         loadTrackedFundsFromStorage(); 
         setupCategoryListeners();
 
-        // YENİ EKLENDİ (A/P Butonları için Olay Dinleyicileri) - TASARIMA GÖRE GÜNCELLENDİ
+        // A/P Butonları için Olay Dinleyicileri
         const hiddenYonetimInput = document.getElementById('yonetim_tipi');
         const yonetimButonlari = document.querySelectorAll('.yonetim-secenek-btn');
 
         yonetimButonlari.forEach(btn => {
             btn.addEventListener('click', () => {
                 const degeri = btn.dataset.value;
-
-                // Zaten seçili mi diye kontrol et
                 if (btn.classList.contains('selected')) {
-                    // Seçimi kaldır (Boş bırakabilmek için)
                     hiddenYonetimInput.value = '';
                     btn.classList.remove('selected');
                 } else {
-                    // Diğerinden seçimi kaldır
                     yonetimButonlari.forEach(b => b.classList.remove('selected'));
-                    // Bunu seç
                     hiddenYonetimInput.value = degeri;
                     btn.classList.add('selected');
                 }
             });
         });
-        // --- DEĞİŞİKLİK SONU ---
         
         document.getElementById('portfolio-list').addEventListener('click', handlePortfolioListClick);
 
@@ -667,10 +659,8 @@
         document.querySelectorAll('input[name="altKategori"]').forEach(radio => radio.checked = false);
         updateAltKategoriVisibility(); 
 
-        // GÜNCELLENDİ (Yeni A/P Butonlarını sıfırla)
         document.getElementById('yonetim_tipi').value = '';
         document.querySelectorAll('.yonetim-secenek-btn').forEach(b => b.classList.remove('selected'));
-        // --- DEĞİŞİKLİK SONU ---
 
         document.getElementById('stocks-container').innerHTML = '';
         document.getElementById('funds-container').innerHTML = '';
@@ -680,7 +670,6 @@
         document.getElementById('result-area').style.display = 'none';
     }
     
-    // GÜNCELLENDİ: Hata yakalama (JSON) için fonksiyon güçlendirildi
     async function deletePortfolio(name) {
         if (confirm(`"${name}" fonunu silmek istediğinizden emin misiniz? Bu işlem geri alınamaz.`)) {
             try {
@@ -691,14 +680,11 @@
                 });
 
                 if (!response.ok) {
-                    // Sunucu 500, 404 gibi bir hata döndü.
                     throw new Error(`Sunucu hatası: ${response.status} ${response.statusText}`);
                 }
                 
-                // Sunucu 'ok' (200) dedi, şimdi JSON olup olmadığını kontrol edelim
                 const contentType = response.headers.get("content-type");
                 if (contentType && contentType.indexOf("application/json") !== -1) {
-                    // Yanıt JSON ise işle
                     const result = await response.json(); 
                     if (result.success) {
                         alert(result.success);
@@ -708,132 +694,146 @@
                         throw new Error(result.error || 'Bilinmeyen bir sunucu hatası (JSON).');
                     }
                 } else {
-                    // Sunucu 200 dedi ama JSON göndermedi, bu sizin hatanız.
-                    // Dönen metni (HTML) okuyup hatayı gösterelim.
                     const textResponse = await response.text(); 
                     throw new Error(`Sunucudan JSON beklenirken HTML/Metin alındı: ${textResponse.substring(0, 100)}...`);
                 }
 
             } catch (error) {
-                // Bu 'catch' hem fetch hatasını (örn: ağ bağlantısı kesildi)
-                // hem de yukarıda 'throw' ile fırlattığımız hataları yakalar.
-                // Orijinal hatanız (Unexpected token '<') da buraya düşer.
-                alert('Fon silinirken bir hata oluştu: 'E' + error.message);
+                alert('Fon silinirken bir hata oluştu: ' + error.message);
             }
         }
     }
 
+    // GÜNCELLENDİ: HATA YAKALAMA EKLENDİ (try...catch)
     async function loadPortfolios() {
-        const response = await fetch('/get_portfolios');
-        const portfolioData = await response.json(); 
         const listElement = document.getElementById('portfolio-list');
-        listElement.innerHTML = '';
-
-        const categories = {
-            'Yurtdışı Fonu': [],
-            'Hisse Senedi Yoğun Fon': { 'Elimde Olanlar': [], 'Takibimdeki Fonlar': [], 'Test Fonu': [], 'Diğer': [] },
-            'Serbest Fon': { 'Elimde Olanlar': [], 'Takibimdeki Fonlar': [], 'Test Fonu': [], 'Diğer': [] },
-            'Kâr Payı Ödeyen': [], 
-            'Listelenmemiş Fonlar': []
-        };
-
-        if (!Array.isArray(portfolioData)) {
-            console.error("Hata: /get_portfolios bir dizi (array) döndürmedi. Dönen veri:", portfolioData);
-            listElement.innerHTML = "<li class='negative' style='padding:10px;'>Fonlar yüklenemedi. Veri formatı hatalı.</li>";
-            return;
-        }
-
-        for (const portfolio of portfolioData) {
-            if (!portfolio.name) continue; 
-
-            if (portfolio.fonTipi === 'Yurtdışı Fonu') {
-                categories['Yurtdışı Fonu'].push(portfolio);
-            } else if (portfolio.fonTipi === 'Kâr Payı Ödeyen') { 
-                 categories['Kâr Payı Ödeyen'].push(portfolio);
-            } else if (portfolio.fonTipi === 'Hisse Senedi Yoğun Fon') {
-                const altKat = portfolio.altKategori;
-                const subCat = (altKat && categories['Hisse Senedi Yoğun Fon'].hasOwnProperty(altKat)) ? altKat : 'Diğer';
-                categories['Hisse Senedi Yoğun Fon'][subCat].push(portfolio);
-            } else if (portfolio.fonTipi === 'Serbest Fon') {
-                const altKat = portfolio.altKategori;
-                const subCat = (altKat && categories['Serbest Fon'].hasOwnProperty(altKat)) ? altKat : 'Diğer';
-                categories['Serbest Fon'][subCat].push(portfolio);
-            } else {
-                categories['Listelenmemiş Fonlar'].push(portfolio);
-            }
-        }
-
-        // DÜZELTME (A/P Etiketinin listede görünmesi için)
-        const createFundLi = (portfolio) => {
-            const li = document.createElement('li');
-            li.textContent = portfolio.name; // DÜZELTME: Önce ismin tamamını ata
-            li.dataset.name = portfolio.name;
-
-            // A/P etiketi (varsa)
-            const yonetimTipi = portfolio.yonetim_tipi;
-            if (yonetimTipi === 'A' || yonetimTipi === 'P') {
-                const etiket = document.createElement('span');
-                etiket.textContent = yonetimTipi;
-                etiket.classList.add('yonetim-etiket');
-                etiket.classList.add(yonetimTipi === 'A' ? 'aktif' : 'pasif');
-                li.appendChild(etiket); // DÜZELTME: Etiketi sona ekle
-            }
+        listElement.innerHTML = '<li style="padding: 10px;">Fonlar yükleniyor...</li>';
+        
+        try {
+            const response = await fetch('/get_portfolios');
             
-            return li;
-        };
-        // --- DÜZELTME SONU ---
+            // JSON hatasını (sunucu çökmesi) burada yakala
+            if (!response.ok) {
+                throw new Error(`Sunucu yanıtı 'ok' değil: ${response.status} ${response.statusText}. app.py loglarını kontrol edin.`);
+            }
 
+            const portfolioData = await response.json(); 
+            listElement.innerHTML = ''; // Yükleme başarılı, listeyi temizle
 
-        const createCategoryHTML = (title, funds) => {
-            if (funds.length === 0) return '';
-            return `
-                <li>
-                    <div class="category-header">${title}</div>
-                    <ul class="fund-sublist">
-                        ${funds.map(portfolio => createFundLi(portfolio).outerHTML).join('')}
-                    </ul>
-                </li>`;
-        };
+            const categories = {
+                'Yurtdışı Fonu': [],
+                'Hisse Senedi Yoğun Fon': { 'Elimde Olanlar': [], 'Takibimdeki Fonlar': [], 'Test Fonu': [], 'Diğer': [] },
+                'Serbest Fon': { 'Elimde Olanlar': [], 'Takibimdeki Fonlar': [], 'Test Fonu': [], 'Diğer': [] },
+                'Kâr Payı Ödeyen': [], 
+                'Listelenmemiş Fonlar': []
+            };
 
-        const createNestedCategoryHTML = (title, subCategories) => {
-            let subHtml = '';
-            let hasFunds = false;
-            const subOrder = ['Elimde Olanlar', 'Takibimdeki Fonlar', 'Test Fonu', 'Diğer'];
-            
-            for(const subTitle of subOrder) {
-                const funds = subCategories[subTitle];
-                if (funds && funds.length > 0) {
-                    hasFunds = true;
-                    const subTitleDisplay = (subTitle === 'Diğer') ? 'Diğer (Kategorisiz)' : subTitle;
-                    
-                    subHtml += `
-                        <li>
-                            <div class="sub-category-header">${subTitleDisplay}</div>
-                            <ul class="fund-sublist-inner">
-                                ${funds.map(portfolio => createFundLi(portfolio).outerHTML).join('')}
-                            </ul>
-                        </li>`;
+            if (!Array.isArray(portfolioData)) {
+                console.error("Hata: /get_portfolios bir dizi (array) döndürmedi. Dönen veri:", portfolioData);
+                throw new Error("Sunucudan hatalı formatta veri alındı.");
+            }
+
+            for (const portfolio of portfolioData) {
+                const name = portfolio.name;
+                if (!name) continue; 
+
+                if (portfolio.fonTipi === 'Yurtdışı Fonu') {
+                    categories['Yurtdışı Fonu'].push(portfolio);
+                } else if (portfolio.fonTipi === 'Kâr Payı Ödeyen') { 
+                    categories['Kâr Payı Ödeyen'].push(portfolio);
+                } else if (portfolio.fonTipi === 'Hisse Senedi Yoğun Fon') {
+                    const altKat = portfolio.altKategori;
+                    const subCat = (altKat && categories['Hisse Senedi Yoğun Fon'].hasOwnProperty(altKat)) ? altKat : 'Diğer';
+                    categories['Hisse Senedi Yoğun Fon'][subCat].push(portfolio);
+                } else if (portfolio.fonTipi === 'Serbest Fon') {
+                    const altKat = portfolio.altKategori;
+                    const subCat = (altKat && categories['Serbest Fon'].hasOwnProperty(altKat)) ? altKat : 'Diğer';
+                    categories['Serbest Fon'][subCat].push(portfolio);
+                } else {
+                    categories['Listelenmemiş Fonlar'].push(portfolio);
                 }
             }
 
-            if (!hasFunds) return '';
-            return `
-                <li>
-                    <div class="category-header">${title}</div>
-                    <ul class="fund-sublist">
-                        ${subHtml}
-                    </ul>
-                </li>`;
-        };
+            const createFundLi = (portfolio) => {
+                const li = document.createElement('li');
+                li.textContent = portfolio.name; 
+                li.dataset.name = portfolio.name;
 
-        let finalHTML = '';
-        finalHTML += createCategoryHTML('Yurtdışı Fonu', categories['Yurtdışı Fonu']);
-        finalHTML += createNestedCategoryHTML('Hisse Senedi Yoğun Fon', categories['Hisse Senedi Yoğun Fon']);
-        finalHTML += createNestedCategoryHTML('Serbest Fon', categories['Serbest Fon']);
-        finalHTML += createCategoryHTML('Kâr Payı Ödeyen', categories['Kâr Payı Ödeyen']);
-        finalHTML += createCategoryHTML('Listelenmemiş Fonlar', categories['Listelenmemiş Fonlar']);
+                const yonetimTipi = portfolio.yonetim_tipi;
+                if (yonetimTipi === 'A' || yonetimTipi === 'P') {
+                    const etiket = document.createElement('span');
+                    etiket.textContent = yonetimTipi;
+                    etiket.classList.add('yonetim-etiket');
+                    etiket.classList.add(yonetimTipi === 'A' ? 'aktif' : 'pasif');
+                    li.appendChild(etiket);
+                }
+                return li;
+            };
 
-        listElement.innerHTML = finalHTML;
+            const createCategoryHTML = (title, funds) => {
+                if (funds.length === 0) return '';
+                return `
+                    <li>
+                        <div class="category-header">${title}</div>
+                        <ul class="fund-sublist">
+                            ${funds.map(portfolio => createFundLi(portfolio).outerHTML).join('')}
+                        </ul>
+                    </li>`;
+            };
+
+            const createNestedCategoryHTML = (title, subCategories) => {
+                let subHtml = '';
+                let hasFunds = false;
+                const subOrder = ['Elimde Olanlar', 'Takibimdeki Fonlar', 'Test Fonu', 'Diğer'];
+                
+                for(const subTitle of subOrder) {
+                    const funds = subCategories[subTitle];
+                    if (funds && funds.length > 0) {
+                        hasFunds = true;
+                        const subTitleDisplay = (subTitle === 'Diğer') ? 'Diğer (Kategorisiz)' : subTitle;
+                        
+                        subHtml += `
+                            <li>
+                                <div class="sub-category-header">${subTitleDisplay}</div>
+                                <ul class="fund-sublist-inner">
+                                    ${funds.map(portfolio => createFundLi(portfolio).outerHTML).join('')}
+                                </ul>
+                            </li>`;
+                    }
+                }
+
+                if (!hasFunds) return '';
+                return `
+                    <li>
+                        <div class="category-header">${title}</div>
+                        <ul class="fund-sublist">
+                            ${subHtml}
+                        </ul>
+                    </li>`;
+            };
+
+            let finalHTML = '';
+            finalHTML += createCategoryHTML('Yurtdışı Fonu', categories['Yurtdışı Fonu']);
+            finalHTML += createNestedCategoryHTML('Hisse Senedi Yoğun Fon', categories['Hisse Senedi Yoğun Fon']);
+            finalHTML += createNestedCategoryHTML('Serbest Fon', categories['Serbest Fon']);
+            finalHTML += createCategoryHTML('Kâr Payı Ödeyen', categories['Kâr Payı Ödeyen']);
+            finalHTML += createCategoryHTML('Listelenmemiş Fonlar', categories['Listelenmemiş Fonlar']);
+
+            listElement.innerHTML = finalHTML;
+            
+            if (finalHTML === '') {
+                 listElement.innerHTML = '<li style="padding: 10px; color: #555;">Kayıtlı fon bulunamadı. "Yeni Fon Ekle" ile başlayın.</li>';
+            }
+
+        } catch (error) {
+            // HATA YAKALAMA (A/P Butonlarının çalışmasını sağlar)
+            console.error("Fonlar yüklenirken kritik bir hata oluştu:", error);
+            listElement.innerHTML = `<li style='padding: 10px; color: #c0392b;'>
+                <b>Hata:</b> Fonlar yüklenemedi.<br>
+                <small>${error.message}</small><br>
+                <small>Sunucu (app.py) veya Supabase bağlantı hatası olabilir.</small>
+            </li>`;
+        }
     }
     
     function addAsset(type, ticker = '', weight = '', adet = '') {
@@ -1183,7 +1183,6 @@
         }
         updateAltKategoriVisibility(); 
 
-        // GÜNCELLENDİ (Yeni A/P Buton durumunu yükle)
         document.getElementById('yonetim_tipi').value = '';
         document.querySelectorAll('.yonetim-secenek-btn').forEach(b => b.classList.remove('selected'));
         
@@ -1195,7 +1194,6 @@
                 seciliButon.classList.add('selected');
             }
         }
-        // --- DEĞİŞİKLİK SONU ---
 
         const stocksContainer = document.getElementById('stocks-container');
         stocksContainer.innerHTML = '';
@@ -1209,14 +1207,13 @@
         document.querySelector('#form-container .back-button').style.display = 'block';
     }
     
-    // GÜNCELLENDİ (A/P Değerini kaydetmek için)
     document.getElementById('save-button').addEventListener('click', async function() {
         const portfolioName = document.getElementById('portfolio-name').value.trim();
         if (!portfolioName) { alert('Lütfen bir fon adı girin.'); return; }
 
         const fonTipi = document.querySelector('input[name="fonTipi"]:checked')?.value || null;
         const altKategori = document.querySelector('input[name="altKategori"]:checked')?.value || null;
-        const yonetim_tipi = document.getElementById('yonetim_tipi').value || null; // GÜNCELLENDİ
+        const yonetim_tipi = document.getElementById('yonetim_tipi').value || null; 
         
         const stocks = Array.from(document.querySelectorAll('#stocks-container .stock-row')).map(r => ({ ticker: r.children[0].value.trim().toUpperCase(), weight: r.children[1].value, adet: r.children[2].value }));
         const funds = Array.from(document.querySelectorAll('#funds-container .stock-row')).map(r => ({ ticker: r.children[0].value.trim().toUpperCase(), weight: r.children[1].value, adet: r.children[2].value }));
@@ -1234,7 +1231,7 @@
                 name: portfolioName, 
                 fonTipi: fonTipi, 
                 altKategori: altKategori, 
-                yonetim_tipi: yonetim_tipi, // GÜNCELLENDİ
+                yonetim_tipi: yonetim_tipi, 
                 stocks, 
                 funds 
             }) 
