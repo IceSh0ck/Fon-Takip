@@ -65,11 +65,25 @@ def _calculate_portfolio_return(stocks, funds):
     
     for stock in stocks:
         ticker, weight = stock.get('ticker', '').strip().upper(), float(stock.get('weight', 0))
+        
+        # YENİ: Borsa tipini al (varsayılan 'bist')
+        # JS'den 'borsa_tipi' adında bir alan bekliyoruz ('bist' veya 'yabanci')
+        borsa_tipi = stock.get('borsa_tipi', 'bist') 
+        
         if not ticker or weight == 0: continue
+        
         if ticker in ['NAKIT', 'CASH', 'TAHVIL', 'BOND', 'DEVLET TAHVILI']:
             asset_details.append({'type': 'stock', 'ticker': ticker.capitalize(), 'daily_change': 0.0, 'weighted_impact': 0.0})
             continue
-        yf_ticker = ticker + '.IS' if not ticker.endswith('.IS') else ticker
+            
+        # ESKİ SATIR SİLİNDİ: yf_ticker = ticker + '.IS' if not ticker.endswith('.IS') else ticker
+        
+        # YENİ Borsa Mantığı:
+        if borsa_tipi == 'bist':
+            yf_ticker = ticker + '.IS'
+        else: # 'yabanci' ise
+            yf_ticker = ticker
+            
         try:
             hist = yf.Ticker(yf_ticker).history(period="2d")
             daily_change = (hist['Close'].iloc[-1] - hist['Close'].iloc[-2]) / hist['Close'].iloc[-2] * 100 if len(hist) >= 2 else 0.0
@@ -184,9 +198,10 @@ def save_portfolio():
         portfolio_container['history'] = portfolio_container['history'][:5]
 
     # GÜNCELLENDİ: Kategori ve Yönetim Tipi verilerini 'current' objesine ekle
+    # 'stocks' objesi artık 'borsa_tipi' alanını da içeriyor
     new_current_version = {
         'name': portfolio_name, 
-        'fonTipi': fonTipi,           # EKLENDİ
+        'fonTipi': fonTipi,         # EKLENDİ
         'altKategori': altKategori,   # EKLENDİ
         'yonetim_tipi': yonetim_tipi, # YENİ EKLENDİ (A/P)
         'stocks': stocks, 
@@ -212,6 +227,8 @@ def calculate():
     if not stocks and not funds: 
         return jsonify({'error': 'Hesaplanacak veri gönderilmedi.'}), 400
     
+    # GÜNCELLENDİ: 'stocks' objesi artık 'borsa_tipi' içeriyor
+    # ve _calculate_portfolio_return bu bilgiyi kullanıyor.
     result = _calculate_portfolio_return(stocks, funds)
     return jsonify(result)
 
@@ -232,6 +249,8 @@ def get_all_fund_returns():
         if not stocks and not funds:
             continue
             
+        # GÜNCELLENDİ: 'stocks' objesi artık 'borsa_tipi' içeriyor
+        # ve _calculate_portfolio_return bu bilgiyi kullanıyor.
         calculation_result = _calculate_portfolio_return(stocks, funds)
         
         all_returns.append({
@@ -297,7 +316,21 @@ def calculate_historical(portfolio_name):
     asset_prices_df = pd.DataFrame()
     stocks_in_portfolio = portfolio.get('stocks', [])
     if stocks_in_portfolio:
-        stock_tickers_is = [s['ticker'].strip().upper() + '.IS' for s in stocks_in_portfolio]
+        
+        # ESKİ SATIR SİLİNDİ: stock_tickers_is = [s['ticker'].strip().upper() + '.IS' for s in stocks_in_portfolio]
+        
+        # YENİ Borsa Mantığı:
+        stock_tickers_is = []
+        for s in stocks_in_portfolio:
+            ticker = s['ticker'].strip().upper()
+            # Kayıtlı veriden 'borsa_tipi'ni oku, yoksa 'bist' varsay
+            borsa_tipi = s.get('borsa_tipi', 'bist') 
+            
+            if borsa_tipi == 'bist':
+                stock_tickers_is.append(ticker + '.IS')
+            else: # 'yabanci' ise
+                stock_tickers_is.append(ticker)
+                
         try:
             stock_data = yf.download(stock_tickers_is, start=start_date, end=end_date, progress=False)
             if not stock_data.empty:
@@ -305,6 +338,7 @@ def calculate_historical(portfolio_name):
                 asset_prices_df = pd.concat([asset_prices_df, close_prices], axis=1)
         except Exception as e:
             print(f"Hisse senedi verisi alınırken hata: {e}")
+            
     sdt_str, fdt_str = start_date.strftime('%d-%m-%Y'), end_date.strftime('%d-%m-%Y')
     for fund in portfolio.get('funds', []):
         fund_code = fund['ticker'].strip().upper()
@@ -318,7 +352,10 @@ def calculate_historical(portfolio_name):
                 asset_prices_df = pd.concat([asset_prices_df, df], axis=1)
         except Exception as e: print(f"Fon verisi alınırken hata ({fund_code}): {e}")
     if asset_prices_df.empty: return jsonify({'error': 'Tarihsel veri bulunamadı.'}), 400
+    
+    # .IS'i temizleme mantığı BİST dışı hisseler için sorun yaratmaz, kalabilir.
     asset_prices_df.columns = asset_prices_df.columns.str.replace('.IS', '', regex=False)
+    
     asset_prices_df = asset_prices_df.ffill().dropna(how='all')
     daily_returns = asset_prices_df.pct_change()
     weights_dict = {asset['ticker'].strip().upper(): float(asset['weight']) / 100 for asset in all_assets}
@@ -399,14 +436,26 @@ def calculate_dynamic_weights():
     
     for stock in stocks:
         ticker, adet = stock.get('ticker').strip().upper(), int(stock.get('adet') or 0)
+        
+        # YENİ: Borsa tipini al
+        borsa_tipi = stock.get('borsa_tipi', 'bist')
+        
         if adet == 0: continue
+        
         if ticker in ['NAKIT', 'CASH', 'TAHVIL', 'BOND', 'DEVLET TAHVILI']:
             market_value = float(adet)
             asset_market_values.append({'type': 'stock', 'ticker': ticker, 'adet': adet, 'market_value': market_value, 'data': None})
             total_portfolio_value += market_value
             continue
             
-        yf_ticker = ticker + '.IS' if not ticker.endswith('.IS') else ticker
+        # ESKİ SATIR SİLİNDİ: yf_ticker = ticker + '.IS' if not ticker.endswith('.IS') else ticker
+        
+        # YENİ Borsa Mantığı:
+        if borsa_tipi == 'bist':
+            yf_ticker = ticker + '.IS'
+        else: # 'yabanci' ise
+            yf_ticker = ticker
+            
         try:
             hist = yf.Ticker(yf_ticker).history(period="2d")
             if hist.empty: raise Exception("Veri yok")
@@ -432,7 +481,7 @@ def calculate_dynamic_weights():
             total_portfolio_value += market_value
         except Exception as e:
             print(f"Fiyat alınamadı ({fund_code}): {e}")
-            asset_m_values.append({'type': 'fund', 'ticker': fund_code, 'adet': adet, 'market_value': 0, 'data': None, 'error': 'Fiyat alınamadı'})
+            asset_market_values.append({'type': 'fund', 'ticker': fund_code, 'adet': adet, 'market_value': 0, 'data': None, 'error': 'Fiyat alınamadı'})
 
     if total_portfolio_value == 0:
         return jsonify({'error': 'Portföy toplam değeri sıfır. Adetleri veya varlık kodlarını kontrol edin.'}), 400
