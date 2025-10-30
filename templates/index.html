@@ -165,7 +165,10 @@
 
         .form-category-group { margin-top: 20px; }
         .form-category-group > label { font-weight: bold; display: block; margin-bottom: 10px; color: #2c3e50; }
-        .form-radio-group { display: flex; flex-wrap: wrap; gap: 10px 20px; align-items: center; } 
+        
+        /* DEĞİŞİKLİK BURADA: flex-wrap: nowrap olarak değiştirildi */
+        .form-radio-group { display: flex; flex-wrap: nowrap; gap: 10px 20px; align-items: center; } 
+        
         .form-radio-group label { display: flex; align-items: center; gap: 5px; cursor: pointer; font-weight: normal; }
         .form-radio-group input[type="radio"] { width: auto; }
 
