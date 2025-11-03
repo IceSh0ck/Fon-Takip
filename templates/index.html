@@ -293,7 +293,6 @@
                         <label><input type="radio" name="fonTipi" value="Yurtdışı Fonu"> Yurtdışı Fonu</label>
                         <label><input type="radio" name="fonTipi" value="Hisse Senedi Yoğun Fon"> Hisse Senedi Yoğun Fon</label>
                         <label><input type="radio" name="fonTipi" value="Serbest Fon"> Serbest Fon</label>
-                        <label><input type="radio" name="fonTipi" value="Kâr Payı Ödeyen"> Kâr Payı Ödeyen</label>
                         <label><input type="radio" name="fonTipi" value="Değişken Fon"> Değişken Fon</label>
                     </div>
                 </div>
@@ -513,7 +512,7 @@
             altKategoriContainer.style.display = 'block';
         } else {
             altKategoriContainer.style.display = 'none';
-            // Diğer tipler (Yurtdışı, Kâr Payı, Değişken) seçildiğinde alt kategori seçimini temizle
+            // Diğer tipler (Yurtdışı, Değişken) seçildiğinde alt kategori seçimini temizle
             document.querySelectorAll('input[name="altKategori"]').forEach(radio => radio.checked = false);
         }
     }
@@ -563,13 +562,12 @@
             
             mergedData.sort((a, b) => b.return - a.return);
 
-            // DEĞİŞİKLİK BURADA: 'Değişken Fon' eklendi
+            // DEĞİŞİKLİK BURADA: 'Kâr Payı Ödeyen' kaldırıldı
             const categories = {
                 'Yurtdışı Fonu': [],
                 'Hisse Senedi Yoğun Fon': { 'Elimde Olanlar': [], 'Takibimdeki Fonlar': [], 'Test Fonu': [], 'Diğer': [] },
                 'Serbest Fon': { 'Elimde Olanlar': [], 'Takibimdeki Fonlar': [], 'Test Fonu': [], 'Diğer': [] },
-                'Kâr Payı Ödeyen': [], 
-                'Değişken Fon': [], // YENİ EKLENDİ
+                'Değişken Fon': [],
                 'Listelenmemiş Fonlar': []
             };
 
@@ -577,12 +575,10 @@
                 const fonTipi = fund.fonTipi;
                 const altKategori = fund.altKategori;
 
-                // DEĞİŞİKLİK BURADA: 'Değişken Fon' için else if eklendi
+                // DEĞİŞİKLİK BURADA: 'Kâr Payı Ödeyen' için 'else if' kaldırıldı
                 if (fonTipi === 'Yurtdışı Fonu') {
                     categories['Yurtdışı Fonu'].push(fund);
-                } else if (fonTipi === 'Kâr Payı Ödeyen') { 
-                    categories['Kâr Payı Ödeyen'].push(fund);
-                } else if (fonTipi === 'Değişken Fon') { // YENİ EKLENDİ
+                } else if (fonTipi === 'Değişken Fon') {
                     categories['Değişken Fon'].push(fund);
                 } else if (fonTipi === 'Hisse Senedi Yoğun Fon') {
                     const subCat = (altKategori && categories['Hisse Senedi Yoğun Fon'].hasOwnProperty(altKategori)) ? altKategori : 'Diğer';
@@ -665,13 +661,12 @@
                 `;
             };
 
-            // DEĞİŞİKLİK BURADA: 'Değişken Fon' render listesine eklendi
+            // DEĞİŞİKLİK BURADA: 'Kâr Payı Ödeyen' render listesinden kaldırıldı
             let finalHTML = '';
             finalHTML += createRankingCategoryHTML('Yurtdışı Fonu', categories['Yurtdışı Fonu']);
             finalHTML += createRankingNestedCategoryHTML('Hisse Senedi Yoğun Fon', categories['Hisse Senedi Yoğun Fon']);
             finalHTML += createRankingNestedCategoryHTML('Serbest Fon', categories['Serbest Fon']);
-            finalHTML += createRankingCategoryHTML('Kâr Payı Ödeyen', categories['Kâr Payı Ödeyen']);
-            finalHTML += createRankingCategoryHTML('Değişken Fon', categories['Değişken Fon']); // YENİ EKLENDİ
+            finalHTML += createRankingCategoryHTML('Değişken Fon', categories['Değişken Fon']);
             finalHTML += createRankingCategoryHTML('Listelenmemiş Fonlar', categories['Listelenmemiş Fonlar']);
             
             container.innerHTML = finalHTML || '<p style="text-align:center; padding: 20px;">Sıralanacak kayıtlı fon bulunamadı.</p>';
@@ -775,13 +770,12 @@
             const portfolioData = await response.json(); 
             listElement.innerHTML = ''; // Yükleme başarılı, listeyi temizle
 
-            // DEĞİŞİKLİK BURADA: 'Değişken Fon' eklendi
+            // DEĞİŞİKLİK BURADA: 'Kâr Payı Ödeyen' kaldırıldı
             const categories = {
                 'Yurtdışı Fonu': [],
                 'Hisse Senedi Yoğun Fon': { 'Elimde Olanlar': [], 'Takibimdeki Fonlar': [], 'Test Fonu': [], 'Diğer': [] },
                 'Serbest Fon': { 'Elimde Olanlar': [], 'Takibimdeki Fonlar': [], 'Test Fonu': [], 'Diğer': [] },
-                'Kâr Payı Ödeyen': [], 
-                'Değişken Fon': [], // YENİ EKLENDİ
+                'Değişken Fon': [],
                 'Listelenmemiş Fonlar': []
             };
 
@@ -794,12 +788,10 @@
                 const name = portfolio.name;
                 if (!name) continue; 
 
-                // DEĞİŞİKLİK BURADA: 'Değişken Fon' için else if eklendi
+                // DEĞİŞİKLİK BURADA: 'Kâr Payı Ödeyen' için 'else if' kaldırıldı
                 if (portfolio.fonTipi === 'Yurtdışı Fonu') {
                     categories['Yurtdışı Fonu'].push(portfolio);
-                } else if (portfolio.fonTipi === 'Kâr Payı Ödeyen') { 
-                    categories['Kâr Payı Ödeyen'].push(portfolio);
-                } else if (portfolio.fonTipi === 'Değişken Fon') { // YENİ EKLENDİ
+                } else if (portfolio.fonTipi === 'Değişken Fon') {
                     categories['Değişken Fon'].push(portfolio);
                 } else if (portfolio.fonTipi === 'Hisse Senedi Yoğun Fon') {
                     const altKat = portfolio.altKategori;
@@ -872,13 +864,12 @@
                     </li>`;
             };
 
-            // DEĞİŞİKLİK BURADA: 'Değişken Fon' render listesine eklendi
+            // DEĞİŞİKLİK BURADA: 'Kâr Payı Ödeyen' render listesinden kaldırıldı
             let finalHTML = '';
             finalHTML += createCategoryHTML('Yurtdışı Fonu', categories['Yurtdışı Fonu']);
             finalHTML += createNestedCategoryHTML('Hisse Senedi Yoğun Fon', categories['Hisse Senedi Yoğun Fon']);
             finalHTML += createNestedCategoryHTML('Serbest Fon', categories['Serbest Fon']);
-            finalHTML += createCategoryHTML('Kâr Payı Ödeyen', categories['Kâr Payı Ödeyen']);
-            finalHTML += createCategoryHTML('Değişken Fon', categories['Değişken Fon']); // YENİ EKLENDİ
+            finalHTML += createCategoryHTML('Değişken Fon', categories['Değişken Fon']);
             finalHTML += createCategoryHTML('Listelenmemiş Fonlar', categories['Listelenmemiş Fonlar']);
 
             listElement.innerHTML = finalHTML;
