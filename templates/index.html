@@ -129,7 +129,8 @@
         .tracking-funds-container { background-color: #f8f9fa; padding: 15px 20px; border-radius: 8px; }
         .tracking-funds-container h3 { margin-top: 0; border-bottom: 1px solid #e0e0e0; }
         
-        #tracking-list-ul { 
+        /* GÜNCELLENDİ: ID'ler (tracking-list-ul) artık daha genel bir class (tracking-list) kullanabilir ama şimdilik ID ile bırakalım */
+        #tracking-list-ul, #new-funds-list-ul { 
             list-style: none; 
             padding: 0; 
             margin: 15px 0; 
@@ -141,9 +142,9 @@
             padding: 10px; 
             border-radius: 5px; 
         }
-        #tracking-list-ul li { padding: 8px 10px; border-bottom: 1px solid #eee; cursor: pointer; }
-        #tracking-list-ul li:last-child { border-bottom: none; }
-        #tracking-list-ul li.selected { background-color: #e0eafc; font-weight: bold; }
+        #tracking-list-ul li, #new-funds-list-ul li { padding: 8px 10px; border-bottom: 1px solid #eee; cursor: pointer; }
+        #tracking-list-ul li:last-child, #new-funds-list-ul li:last-child { border-bottom: none; }
+        #tracking-list-ul li.selected, #new-funds-list-ul li.selected { background-color: #e0eafc; font-weight: bold; }
         
         .tracking-buttons { display: flex; gap: 10px; margin-top: 10px; }
         .tracking-buttons button { 
@@ -156,15 +157,17 @@
             font-weight: bold; 
             font-size: 14px;
         }
-        #btn-track-add { background-color: #3498db; }
-        #btn-track-add:hover { background-color: #2980b9; }
-        #btn-track-delete { background-color: #e74c3c; }
-        #btn-track-delete:hover { background-color: #c0392b; }
         
-        #btn-track-save { background-color: #2ecc71; }
-        #btn-track-save:hover { background-color: #27ae60; }
-        #btn-track-cancel { background-color: #7f8c8d; }
-        #btn-track-cancel:hover { background-color: #5d6d7e; }
+        /* Buton stilleri class'lar üzerinden yönetilirse daha iyi olur ama şimdilik ID'ler ile devam */
+        #btn-track-add, #btn-new-funds-add { background-color: #3498db; }
+        #btn-track-add:hover, #btn-new-funds-add:hover { background-color: #2980b9; }
+        #btn-track-delete, #btn-new-funds-delete { background-color: #e74c3c; }
+        #btn-track-delete:hover, #btn-new-funds-delete:hover { background-color: #c0392b; }
+        
+        #btn-track-save, #btn-new-funds-save { background-color: #2ecc71; }
+        #btn-track-save:hover, #btn-new-funds-save:hover { background-color: #27ae60; }
+        #btn-track-cancel, #btn-new-funds-cancel { background-color: #7f8c8d; }
+        #btn-track-cancel:hover, #btn-new-funds-cancel:hover { background-color: #5d6d7e; }
 
         .form-category-group { margin-top: 20px; }
         .form-category-group > label { font-weight: bold; display: block; margin-bottom: 10px; color: #2c3e50; }
@@ -345,6 +348,7 @@
     </div>
     
     <div class="sidebar-right">
+        
         <div class="tracking-funds-container">
             <h3>Takip Edilecek Fonlar</h3>
             <ul id="tracking-list-ul">
@@ -363,9 +367,27 @@
                 <button id="btn-track-delete">Fon Sil</button> 
             </div>
         </div>
+        
+        <div class="tracking-funds-container" style="margin-top: 20px;">
+            <h3>Yeni Gelecek Fonlar</h3>
+            <ul id="new-funds-list-ul">
+                </ul>
+
+            <div id="new-funds-add-form" style="display: none;">
+                <input type="text" id="new-funds-fund-name" placeholder="Yeni Fon Adı" style="margin-bottom: 10px;">
+                <div class="tracking-buttons" style="margin-top: 0;">
+                    <button id="btn-new-funds-save">Kaydet</button>
+                    <button id="btn-new-funds-cancel">İptal</button>
+                </div>
+            </div>
+            
+            <div class="tracking-buttons" id="new-funds-main-buttons">
+                <button id="btn-new-funds-add">Fon Ekle</button>
+                <button id="btn-new-funds-delete">Fon Sil</button> 
+            </div>
+        </div>
+        </div>
     </div>
-    
-</div>
 
 <script>
     let currentPortfolioName = null;
@@ -373,9 +395,14 @@
     let historicalChart = null;
     let isDeleteMode = false;
     let rankingInterval = null;
+    
+    // GÜNCELLENDİ: Yeni değişkenler eklendi
     let selectedTrackedFundLi = null; 
+    let selectedNewFundLi = null; // YENİ EKLENDİ
     
     const TRACKED_FUNDS_KEY = 'trackedFundsList';
+    const NEW_FUNDS_KEY = 'newUpcomingFundsList'; // YENİ EKLENDİ
+    // GÜNCELLENME BİTTİ
 
     document.addEventListener('DOMContentLoaded', () => { 
         // DİKKAT: loadPortfolios() artık HATA YAKALIYOR
@@ -383,6 +410,7 @@
         loadPortfolios(); 
         
         loadTrackedFundsFromStorage(); 
+        loadNewFundsFromStorage(); // YENİ EKLENDİ
         setupCategoryListeners();
 
         // A/P Butonları için Olay Dinleyicileri
@@ -421,12 +449,23 @@
         
         document.getElementById('portfolio-form').addEventListener('submit', handleCalculate);
         
+        // GÜNCELLENDİ: Yeni event listener'lar eklendi
+        // --- ESKİ TAKİP LİSTESİ ---
         document.getElementById('btn-track-add').addEventListener('click', showTrackAddForm); 
         document.getElementById('btn-track-delete').addEventListener('click', deleteTrackedFund);
         document.getElementById('tracking-list-ul').addEventListener('click', selectTrackedFund);
         
         document.getElementById('btn-track-save').addEventListener('click', saveNewTrackedFund);
         document.getElementById('btn-track-cancel').addEventListener('click', hideTrackAddForm);
+        
+        // --- YENİ EKLENEN LİSTE DİNLEYİCİLERİ ---
+        document.getElementById('btn-new-funds-add').addEventListener('click', showNewFundsAddForm); 
+        document.getElementById('btn-new-funds-delete').addEventListener('click', deleteNewUpcomingFund);
+        document.getElementById('new-funds-list-ul').addEventListener('click', selectNewUpcomingFund);
+        
+        document.getElementById('btn-new-funds-save').addEventListener('click', saveNewUpcomingFund);
+        document.getElementById('btn-new-funds-cancel').addEventListener('click', hideNewFundsAddForm);
+        // --- GÜNCELLENME BİTTİ ---
     });
 
     /**
@@ -1487,6 +1526,90 @@
             syncTrackedFundsToStorage(); 
         } else {
             alert("Lütfen silmek için listeden bir fon seçin.");
+        }
+    }
+    
+    // --- YENİ GELECEK FONLAR LİSTESİ FONKSİYONLARI (YENİ EKLENDİ) ---
+
+    function syncNewFundsToStorage() {
+        const liste = document.getElementById('new-funds-list-ul');
+        const fundElements = liste.querySelectorAll('li');
+        const fundNames = Array.from(fundElements).map(li => li.textContent);
+        
+        localStorage.setItem(NEW_FUNDS_KEY, JSON.stringify(fundNames));
+        
+        // Bu liste canlı sıralamayı etkilememeli
+    }
+
+    function loadNewFundsFromStorage() {
+        const savedFunds = localStorage.getItem(NEW_FUNDS_KEY);
+        if (savedFunds) {
+            const fundNames = JSON.parse(savedFunds);
+            const liste = document.getElementById('new-funds-list-ul');
+            liste.innerHTML = ''; 
+            
+            fundNames.forEach(fonAdi => {
+                const newLi = document.createElement('li');
+                newLi.textContent = fonAdi;
+                liste.appendChild(newLi);
+            });
+        }
+    }
+
+    function showNewFundsAddForm() {
+        document.getElementById('new-funds-main-buttons').style.display = 'none';
+        document.getElementById('new-funds-add-form').style.display = 'block';
+        document.getElementById('new-funds-fund-name').focus();
+    }
+
+    function hideNewFundsAddForm() {
+        document.getElementById('new-funds-add-form').style.display = 'none';
+        document.getElementById('new-funds-main-buttons').style.display = 'flex'; 
+        document.getElementById('new-funds-fund-name').value = ''; 
+    }
+
+    function saveNewUpcomingFund() {
+        const input = document.getElementById('new-funds-fund-name');
+        const fonAdi = input.value.trim().toUpperCase(); 
+        
+        if (fonAdi !== "") {
+            const liste = document.getElementById('new-funds-list-ul');
+            
+            const existing = Array.from(liste.querySelectorAll('li')).some(li => li.textContent === fonAdi);
+            if (existing) {
+                alert("Bu fon zaten 'Yeni Gelecekler' listenizde.");
+                return;
+            }
+            
+            const newLi = document.createElement('li');
+            newLi.textContent = fonAdi;
+            liste.appendChild(newLi);
+            
+            hideNewFundsAddForm(); 
+            syncNewFundsToStorage(); 
+        } else {
+            alert("Lütfen bir fon adı girin.");
+        }
+    }
+
+    function selectNewUpcomingFund(event) {
+        if (event.target.tagName === 'LI') {
+            if (selectedNewFundLi) {
+                selectedNewFundLi.classList.remove('selected');
+            }
+            selectedNewFundLi = event.target;
+            selectedNewFundLi.classList.add('selected');
+        }
+    }
+
+
+    function deleteNewUpcomingFund() {
+        if (selectedNewFundLi) {
+            selectedNewFundLi.remove(); 
+            selectedNewFundLi = null; 
+            syncNewFundsToStorage(); 
+        } else {
+            alert("Lütfen silmek için 'Yeni Gelecekler' listesinden bir fon seçin.");
         }
     }
 </script>
