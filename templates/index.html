@@ -290,11 +290,9 @@
                 <div class="form-category-group">
                     <label>Fon Tipi</label>
                     <div class="form-radio-group" id="fon-tipi-group">
-                        <label><input type="radio" name="fonTipi" value="Yurtdışı Fonu"> Yurtdışı Fonu</label>
                         <label><input type="radio" name="fonTipi" value="Hisse Senedi Yoğun Fon"> Hisse Senedi Yoğun Fon</label>
                         <label><input type="radio" name="fonTipi" value="Serbest Fon"> Serbest Fon</label>
-                        <label><input type="radio" name="fonTipi" value="Değişken Fon"> Değişken Fon</label>
-                    </div>
+                        </div>
                 </div>
 
                 <div class="form-category-group" id="alt-kategori-container" style="display: none; padding-left: 20px; background-color: #f8f9fa; border-radius: 5px; padding: 10px 20px;">
@@ -562,12 +560,10 @@
             
             mergedData.sort((a, b) => b.return - a.return);
 
-            // DEĞİŞİKLİK BURADA: 'Kâr Payı Ödeyen' kaldırıldı
+            // DEĞİŞİKLİK BURADA: 'Yurtdışı Fonu' ve 'Değişken Fon' kaldırıldı
             const categories = {
-                'Yurtdışı Fonu': [],
                 'Hisse Senedi Yoğun Fon': { 'Elimde Olanlar': [], 'Takibimdeki Fonlar': [], 'Test Fonu': [], 'Diğer': [] },
                 'Serbest Fon': { 'Elimde Olanlar': [], 'Takibimdeki Fonlar': [], 'Test Fonu': [], 'Diğer': [] },
-                'Değişken Fon': [],
                 'Listelenmemiş Fonlar': []
             };
 
@@ -575,12 +571,8 @@
                 const fonTipi = fund.fonTipi;
                 const altKategori = fund.altKategori;
 
-                // DEĞİŞİKLİK BURADA: 'Kâr Payı Ödeyen' için 'else if' kaldırıldı
-                if (fonTipi === 'Yurtdışı Fonu') {
-                    categories['Yurtdışı Fonu'].push(fund);
-                } else if (fonTipi === 'Değişken Fon') {
-                    categories['Değişken Fon'].push(fund);
-                } else if (fonTipi === 'Hisse Senedi Yoğun Fon') {
+                // DEĞİŞİKLİK BURADA: 'Yurtdışı Fonu' ve 'Değişken Fon' if blokları kaldırıldı
+                if (fonTipi === 'Hisse Senedi Yoğun Fon') {
                     const subCat = (altKategori && categories['Hisse Senedi Yoğun Fon'].hasOwnProperty(altKategori)) ? altKategori : 'Diğer';
                     categories['Hisse Senedi Yoğun Fon'][subCat].push(fund);
                 } else if (fonTipi === 'Serbest Fon') {
@@ -661,12 +653,10 @@
                 `;
             };
 
-            // DEĞİŞİKLİK BURADA: 'Kâr Payı Ödeyen' render listesinden kaldırıldı
+            // DEĞİŞİKLİK BURADA: 'Yurtdışı Fonu' ve 'Değişken Fon' render listesinden kaldırıldı
             let finalHTML = '';
-            finalHTML += createRankingCategoryHTML('Yurtdışı Fonu', categories['Yurtdışı Fonu']);
             finalHTML += createRankingNestedCategoryHTML('Hisse Senedi Yoğun Fon', categories['Hisse Senedi Yoğun Fon']);
             finalHTML += createRankingNestedCategoryHTML('Serbest Fon', categories['Serbest Fon']);
-            finalHTML += createRankingCategoryHTML('Değişken Fon', categories['Değişken Fon']);
             finalHTML += createRankingCategoryHTML('Listelenmemiş Fonlar', categories['Listelenmemiş Fonlar']);
             
             container.innerHTML = finalHTML || '<p style="text-align:center; padding: 20px;">Sıralanacak kayıtlı fon bulunamadı.</p>';
@@ -770,12 +760,10 @@
             const portfolioData = await response.json(); 
             listElement.innerHTML = ''; // Yükleme başarılı, listeyi temizle
 
-            // DEĞİŞİKLİK BURADA: 'Kâr Payı Ödeyen' kaldırıldı
+            // DEĞİŞİKLİK BURADA: 'Yurtdışı Fonu' ve 'Değişken Fon' kaldırıldı
             const categories = {
-                'Yurtdışı Fonu': [],
                 'Hisse Senedi Yoğun Fon': { 'Elimde Olanlar': [], 'Takibimdeki Fonlar': [], 'Test Fonu': [], 'Diğer': [] },
                 'Serbest Fon': { 'Elimde Olanlar': [], 'Takibimdeki Fonlar': [], 'Test Fonu': [], 'Diğer': [] },
-                'Değişken Fon': [],
                 'Listelenmemiş Fonlar': []
             };
 
@@ -788,12 +776,8 @@
                 const name = portfolio.name;
                 if (!name) continue; 
 
-                // DEĞİŞİKLİK BURADA: 'Kâr Payı Ödeyen' için 'else if' kaldırıldı
-                if (portfolio.fonTipi === 'Yurtdışı Fonu') {
-                    categories['Yurtdışı Fonu'].push(portfolio);
-                } else if (portfolio.fonTipi === 'Değişken Fon') {
-                    categories['Değişken Fon'].push(portfolio);
-                } else if (portfolio.fonTipi === 'Hisse Senedi Yoğun Fon') {
+                // DEĞİŞİKLİK BURADA: 'Yurtdışı Fonu' ve 'Değişken Fon' if blokları kaldırıldı
+                if (portfolio.fonTipi === 'Hisse Senedi Yoğun Fon') {
                     const altKat = portfolio.altKategori;
                     const subCat = (altKat && categories['Hisse Senedi Yoğun Fon'].hasOwnProperty(altKat)) ? altKat : 'Diğer';
                     categories['Hisse Senedi Yoğun Fon'][subCat].push(portfolio);
@@ -864,18 +848,16 @@
                     </li>`;
             };
 
-            // DEĞİŞİKLİK BURADA: 'Kâr Payı Ödeyen' render listesinden kaldırıldı
+            // DEĞİŞİKLİK BURADA: 'Yurtdışı Fonu' ve 'Değişken Fon' render listesinden kaldırıldı
             let finalHTML = '';
-            finalHTML += createCategoryHTML('Yurtdışı Fonu', categories['Yurtdışı Fonu']);
             finalHTML += createNestedCategoryHTML('Hisse Senedi Yoğun Fon', categories['Hisse Senedi Yoğun Fon']);
             finalHTML += createNestedCategoryHTML('Serbest Fon', categories['Serbest Fon']);
-            finalHTML += createCategoryHTML('Değişken Fon', categories['Değişken Fon']);
             finalHTML += createCategoryHTML('Listelenmemiş Fonlar', categories['Listelenmemiş Fonlar']);
 
             listElement.innerHTML = finalHTML;
             
             if (finalHTML === '') {
-                 listElement.innerHTML = '<li style="padding: 10px; color: #555;">Kayıtlı fon bulunamadı. "Yeni Fon Ekle" ile başlayın.</li>';
+                listElement.innerHTML = '<li style="padding: 10px; color: #555;">Kayıtlı fon bulunamadı. "Yeni Fon Ekle" ile başlayın.</li>';
             }
 
         } catch (error) {
