@@ -16,6 +16,7 @@ supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 
 # --- VERİ YÜKLEME VE KAYDETME FONKSİYONLARI ---
+# (Bu bölümde değişiklik yok)
 
 def load_portfolios():
     """Supabase veritabanından tüm portföyleri yükler."""
@@ -84,12 +85,35 @@ def _calculate_portfolio_return(stocks, funds):
             yf_ticker = ticker
             
         try:
-            # Önceki değişikliğimiz (5d) korunuyor.
-            hist = yf.Ticker(yf_ticker).history(period="5d")
-            daily_change = (hist['Close'].iloc[-1] - hist['Close'].iloc[-2]) / hist['Close'].iloc[-2] * 100 if len(hist) >= 2 else 0.0
+            # --- YENİ HESAPLAMA YÖNTEMİ ---
+            t = yf.Ticker(yf_ticker)
+            info = t.info
+
+            # 1. Gerçek "Dünkü Kapanış" fiyatını al
+            prev_close = info.get('previousClose')
+            if prev_close is None:
+                hist_2d = t.history(period="2d")
+                if len(hist_2d) < 2:
+                    raise Exception(f"'{ticker}' için 'previousClose' (dünkü kapanış) verisi alınamadı.")
+                prev_close = hist_2d['Close'].iloc[-2]
+                
+            # 2. En "Son Fiyat"ı al (Anlık veya son kapanış)
+            latest_price = info.get('currentPrice', info.get('regularMarketPrice'))
+            if latest_price is None:
+                hist_1d = t.history(period="1d")
+                if hist_1d.empty:
+                    raise Exception(f"'{ticker}' için son fiyat (latest price) alınamadı.")
+                latest_price = hist_1d['Close'].iloc[-1]
+
+            # 3. Hesaplamayı yap
+            daily_change = ((latest_price - prev_close) / prev_close) * 100
+            
             total_portfolio_change += (weight / 100) * daily_change
             asset_details.append({'type': 'stock', 'ticker': ticker, 'daily_change': daily_change, 'weighted_impact': (weight / 100) * daily_change})
-        except Exception: 
+            # --- YENİ HESAPLAMA SONU ---
+
+        except Exception as e:
+            print(f"Hata (_calculate_portfolio_return, {ticker}): {e}") 
             asset_details.append({'type': 'stock', 'ticker': ticker, 'daily_change': 0.0, 'weighted_impact': 0.0, 'error': 'Veri alınamadı'})
     
     # --- TEFAS İLE İLGİLİ TÜM BLOK KALDIRILDI ---
@@ -97,7 +121,7 @@ def _calculate_portfolio_return(stocks, funds):
     return {'total_change': total_portfolio_change, 'details': asset_details}
 
 # --- API ENDPOINT'LERİ ---
-
+# (Değişiklik yok)
 @app.route('/')
 def index():
     return render_template('index.html')
@@ -169,7 +193,7 @@ def save_portfolio():
 
     new_current_version = {
         'name': portfolio_name, 
-        'fonTipi': fonTipi,   
+        'fonTipi': fonTipi,  
         'altKategori': altKategori, 
         'yonetim_tipi': yonetim_tipi,
         'stocks': stocks, 
@@ -217,11 +241,11 @@ def get_all_fund_returns():
         funds = portfolio_data.get('funds', []) # 'funds' alınır ama hesaplamada kullanılmaz
         
         if not stocks and not funds: # Hissesi olmayan fonlar 0 getiri döner
-             all_returns.append({
-                'name': name,
-                'return': 0.0
-             })
-             continue
+               all_returns.append({
+                   'name': name,
+                   'return': 0.0
+               })
+               continue
             
         # _calculate_portfolio_return artık sadece 'stocks'u dikkate alıyor
         calculation_result = _calculate_portfolio_return(stocks, funds)
@@ -241,10 +265,10 @@ def get_all_fund_returns():
 def get_tracked_funds():
     try:
         response = supabase.table('control_panel_data') \
-                            .select('value') \
-                            .eq('key', 'tracked_funds') \
-                            .maybe_single() \
-                            .execute()
+                           .select('value') \
+                           .eq('key', 'tracked_funds') \
+                           .maybe_single() \
+                           .execute()
         
         if response.data and response.data.get('value'):
             return jsonify(response.data['value'])
@@ -274,6 +298,7 @@ def save_tracked_funds():
 
 
 # GÜNCELLENDİ: Bu fonksiyon artık SADECE hisse senetleri için geçmiş hesabı yapar.
+# (Değişiklik yok)
 @app.route('/calculate_historical/<portfolio_name>', methods=['GET'])
 def calculate_historical(portfolio_name):
     portfolios = load_portfolios()
@@ -400,8 +425,9 @@ def calculate_dynamic_weights():
         return jsonify({'error': 'Hesaplanacak veri gönderilmedi.'}), 400
 
     total_portfolio_value = 0.0
-    asset_market_values = []
+    asset_market_values = [] # Hem market değeri hem de hesaplanan değişim burada tutulacak
     
+    # --- BİRİNCİ DÖNGÜ: Fiyatları al, değeri ve DEĞİŞİMİ hesapla ---
     for stock in stocks:
         ticker, adet = stock.get('ticker').strip().upper(), int(stock.get('adet') or 0)
         borsa_tipi = stock.get('borsa_tipi', 'bist')
@@ -410,7 +436,13 @@ def calculate_dynamic_weights():
         
         if ticker in ['NAKIT', 'CASH', 'TAHVIL', 'BOND', 'DEVLET TAHVILI']:
             market_value = float(adet)
-            asset_market_values.append({'type': 'stock', 'ticker': ticker, 'adet': adet, 'market_value': market_value, 'data': None})
+            asset_market_values.append({
+                'type': 'stock', 
+                'ticker': ticker, 
+                'adet': adet, 
+                'market_value': market_value, 
+                'daily_change_calc': 0.0 # Nakit değişimi 0
+            })
             total_portfolio_value += market_value
             continue
             
@@ -420,22 +452,49 @@ def calculate_dynamic_weights():
             yf_ticker = ticker
             
         try:
-            # Önceki değişikliğimiz (5d) korunuyor.
-            hist = yf.Ticker(yf_ticker).history(period="5d")
-            if hist.empty: raise Exception("Veri yok")
-            latest_price = hist['Close'].iloc[-1]
+            # --- YENİ HESAPLAMA YÖNTEMİ ---
+            t = yf.Ticker(yf_ticker)
+            info = t.info
+
+            # 1. Gerçek "Dünkü Kapanış" fiyatını al
+            prev_close = info.get('previousClose')
+            if prev_close is None:
+                hist_2d = t.history(period="2d")
+                if len(hist_2d) < 2:
+                    raise Exception(f"'{ticker}' için 'previousClose' (dünkü kapanış) verisi alınamadı.")
+                prev_close = hist_2d['Close'].iloc[-2]
+                
+            # 2. En "Son Fiyat"ı al (Anlık veya son kapanış)
+            latest_price = info.get('currentPrice', info.get('regularMarketPrice'))
+            if latest_price is None:
+                hist_1d = t.history(period="1d")
+                if hist_1d.empty:
+                    raise Exception(f"'{ticker}' için son fiyat (latest price) alınamadı.")
+                latest_price = hist_1d['Close'].iloc[-1]
+
+            # 3. Hesaplamaları yap
             market_value = latest_price * adet
-            asset_market_values.append({'type': 'stock', 'ticker': ticker, 'adet': adet, 'market_value': market_value, 'data': hist})
+            daily_change = ((latest_price - prev_close) / prev_close) * 100
+            
+            asset_market_values.append({
+                'type': 'stock', 
+                'ticker': ticker, 
+                'adet': adet, 
+                'market_value': market_value,
+                'daily_change_calc': daily_change # Değişimi burada sakla
+            })
             total_portfolio_value += market_value
+            # --- YENİ HESAPLAMA SONU ---
+
         except Exception as e:
-            print(f"Fiyat alınamadı ({ticker}): {e}")
-            asset_market_values.append({'type': 'stock', 'ticker': ticker, 'adet': adet, 'market_value': 0, 'data': None, 'error': 'Fiyat alınamadı'})
+            print(f"Fiyat/Info alınamadı ({ticker}): {e}")
+            # Hata durumunda, market değeri 0, değişim 0 olsun
+            asset_market_values.append({'type': 'stock', 'ticker': ticker, 'adet': adet, 'market_value': 0, 'daily_change_calc': 0, 'error': str(e)})
 
     # --- TEFAS İLE İLGİLİ TÜM BLOK KALDIRILDI ---
     # (for fund in funds: ... bloğu silindi)
 
     if total_portfolio_value == 0:
-        # Hata mesajını güncelledik, çünkü fonlar artık hesaba katılmıyor
         if not stocks:
             return jsonify({'error': 'Portföyde hiç hisse senedi yok.'}), 400
         return jsonify({'error': 'Portföy toplam değeri sıfır (Sadece hisseler dikkate alındı). Adetleri veya varlık kodlarını kontrol edin.'}), 400
@@ -443,6 +502,7 @@ def calculate_dynamic_weights():
     total_portfolio_change = 0.0
     asset_details = []
     
+    # --- İKİNCİ DÖNGÜ: Ağırlıkları ve etkiyi hesapla ---
     # Bu döngü artık SADECE 'asset_market_values' içindeki hisseler için çalışacak.
     for asset in asset_market_values:
         dynamic_weight = (asset['market_value'] / total_portfolio_value) * 100
@@ -451,19 +511,9 @@ def calculate_dynamic_weights():
             asset_details.append({**asset, 'dynamic_weight': 0.0, 'daily_change': 0.0, 'weighted_impact': 0.0})
             continue
 
-        daily_change = 0.0
-        date_range = None
+        # Değişimi ilk döngüden al
+        daily_change = asset.get('daily_change_calc', 0.0)
         
-        # 'asset' her zaman 'stock' tipinde olacak
-        if asset['type'] == 'stock':
-            hist = asset['data']
-            if hist is not None and len(hist) >= 2:
-                daily_change = (hist['Close'].iloc[-1] - hist['Close'].iloc[-2]) / hist['Close'].iloc[-2] * 100
-            elif asset['ticker'] in ['NAKIT', 'CASH', 'TAHVIL', 'BOND', 'DEVLET TAHVILI']:
-                daily_change = 0.0
-        
-        # --- 'elif asset['type'] == 'fund':' bloğuna asla girilmeyecek ---
-
         weighted_impact = (dynamic_weight / 100) * daily_change
         total_portfolio_change += weighted_impact
         
@@ -474,7 +524,6 @@ def calculate_dynamic_weights():
             'daily_change': daily_change,
             'weighted_impact': weighted_impact
         }
-        if date_range: detail['date_range'] = date_range
         asset_details.append(detail)
         
     return jsonify({'total_change': total_portfolio_change, 'details': asset_details})
