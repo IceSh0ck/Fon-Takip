@@ -114,7 +114,7 @@
         .comparison-selector label { font-weight: bold; display: block; margin-bottom: 5px; }
 
         /* CANLI SIRALAMA STİLLERİ */
-        #ranking-timestamp { text-align: center; color: #7f8c8d; margin-top: -10px; margin-bottom: 20px; font-size: 0.9em; }
+        #ranking-timestamp, #my-funds-timestamp { text-align: center; color: #7f8c8d; margin-top: -10px; margin-bottom: 20px; font-size: 0.9em; }
         .ranking-table { width: 100%; border-collapse: collapse; margin-top: 15px; }
         .ranking-table th, .ranking-table td { padding: 12px 15px; border-bottom: 1px solid #ecf0f1; text-align: left; }
         .ranking-table th { background-color: #f8f9f9; font-weight: 600; color: #5d6d7e; }
@@ -253,6 +253,14 @@
             </div>
         </div>
 
+        <div class="container" id="my-funds-summary-container" style="display: block;">
+            <h2>Elimde Olan Fonlar - Günlük Getiri</h2>
+            <div id="my-funds-timestamp"></div>
+            <div id="my-funds-summary-table">
+                <div class="loader"></div>
+            </div>
+        </div>
+
         <div class="container" id="options-container" style="display: none;">
             <h2 id="options-title"></h2>
             <div id="live-return-display">Hesaplanıyor...</div>
@@ -279,7 +287,7 @@
             </div>
         </div>
         
-        <div class="container" id="form-container" style="display: block;"> 
+        <div class="container" id="form-container" style="display: none;"> 
             <a href="#" class="back-button" title="Seçeneklere Geri Dön" style="display: none;">&larr;</a>
             <form id="portfolio-form">
                 <div class="form-group">
@@ -292,7 +300,7 @@
                     <div class="form-radio-group" id="fon-tipi-group">
                         <label><input type="radio" name="fonTipi" value="Hisse Senedi Yoğun Fon"> Hisse Senedi Yoğun Fon</label>
                         <label><input type="radio" name="fonTipi" value="Serbest Fon"> Serbest Fon</label>
-                        </div>
+                    </div>
                 </div>
 
                 <div class="form-category-group" id="alt-kategori-container" style="display: none; padding-left: 20px; background-color: #f8f9fa; border-radius: 5px; padding: 10px 20px;">
@@ -428,6 +436,9 @@
             });
         });
         
+        // YENİ: Varsayılan "Elimde Olanlar" özet ekranını yükle
+        loadMyFundsSummary();
+
         document.getElementById('portfolio-list').addEventListener('click', handlePortfolioListClick);
 
         document.querySelectorAll('.back-button').forEach(button => {
@@ -436,6 +447,9 @@
                 if(currentPortfolioName) {
                     const activeLi = document.querySelector(`#portfolio-list li[data-name="${currentPortfolioName}"]`);
                     showOptions(currentPortfolioName, activeLi);
+                } else {
+                    // YENİ: Geri butonu (formdan) ana ekrana dönsün
+                    loadMyFundsSummary();
                 }
             };
         });
@@ -465,6 +479,103 @@
         // --- GÜNCELLENME BİTTİ ---
     });
 
+    // YENİ FONKSİYON: Varsayılan "Elimde Olanlar" özet ekranını gösterir
+    function loadMyFundsSummary() {
+        // Diğer tüm ana container'ları gizle
+        ['options-container', 'form-container', 'result-area', 'report-container', 'comparison-container', 'live-ranking-container'].forEach(id => {
+            document.getElementById(id).style.display = 'none';
+        });
+        // Özet container'ını göster
+        document.getElementById('my-funds-summary-container').style.display = 'block';
+        
+        // Sol listedeki aktif seçimi kaldır
+        document.querySelectorAll('#portfolio-list li[data-name]').forEach(li => li.classList.remove('active'));
+        currentPortfolioName = null;
+        
+        // Canlı sıralamayı durdur (varsa)
+        stopLiveRanking(); 
+        
+        // Verileri çek ve render et
+        fetchAndRenderMyFundsSummary();
+    }
+
+    // YENİ FONKSİYON: "Elimde Olanlar" verilerini çeker ve tabloyu oluşturur
+    async function fetchAndRenderMyFundsSummary() {
+        const container = document.getElementById('my-funds-summary-table');
+        const timestampContainer = document.getElementById('my-funds-timestamp');
+        container.innerHTML = '<div class="loader"></div>';
+        timestampContainer.textContent = '';
+
+        try {
+            // 1. Tüm portföy (kategori) bilgilerini al
+            const portfoliosResponse = await fetch('/get_portfolios');
+            const portfolioData = await portfoliosResponse.json();
+            if (!portfoliosResponse.ok || !Array.isArray(portfolioData)) {
+                throw new Error(portfolioData.error || 'Kategori verisi alınamadı.');
+            }
+
+            // 2. Sadece "Elimde Olanlar"ı filtrele
+            const myFunds = portfolioData.filter(p => p.altKategori === 'Elimde Olanlar');
+
+            if (myFunds.length === 0) {
+                container.innerHTML = '<p style="text-align:center; padding: 20px;">"Elimde Olanlar" olarak işaretlenmiş bir fon bulunamadı.</p>';
+                timestampContainer.textContent = 'Veri yok';
+                return;
+            }
+
+            // 3. Tüm fonların getirilerini al
+            const returnsResponse = await fetch('/get_all_fund_returns');
+            const returnsData = await returnsResponse.json();
+            if (!returnsResponse.ok || !Array.isArray(returnsData)) {
+                throw new Error(returnsData.error || 'Getiri verisi alınamadı.');
+            }
+
+            // 4. Getirileri bir Map'e dönüştür (hızlı erişim için)
+            const returnsMap = new Map(returnsData.map(fund => [fund.name, { return: fund.return ?? 0 }]));
+
+            // 5. "Elimde Olanlar" listesini getiri verileriyle birleştir
+            const mergedData = myFunds.map(fund => {
+                const returnInfo = returnsMap.get(fund.name) || { return: 0, error: 'Getiri verisi yok' };
+                return { ...fund, ...returnInfo };
+            }).sort((a, b) => b.return - a.return); // Getiriye göre sırala
+
+            // 6. HTML Tablosunu oluştur (fetchAndRenderRankings'ten ilham alarak)
+            let tableHTML = `
+                <table class="ranking-table">
+                    <thead>
+                        <tr><th>Fon Adı</th><th style="text-align: right;">Günlük Getiri</th></tr>
+                    </thead>
+                    <tbody>
+            `;
+
+            mergedData.forEach(fund => {
+                const returnClass = fund.return > 0 ? 'positive' : fund.return < 0 ? 'negative' : '';
+                const returnSign = fund.return > 0 ? '+' : '';
+                let apTag = '';
+                if (fund.yonetim_tipi === 'A' || fund.yonetim_tipi === 'P') {
+                    const apClass = fund.yonetim_tipi === 'A' ? 'aktif' : 'pasif';
+                    apTag = ` <span class="yonetim-etiket ${apClass}" style="float:none; display:inline-block; margin-left: 5px;">${fund.yonetim_tipi}</span>`;
+                }
+
+                tableHTML += `
+                    <tr>
+                        <td class="fund-name">${fund.name}${apTag}</td>
+                        <td class="fund-return ${returnClass}">${returnSign}${fund.return.toFixed(2)}%</td>
+                    </tr>
+                `;
+            });
+
+            tableHTML += '</tbody></table>';
+            container.innerHTML = tableHTML;
+            timestampContainer.textContent = `Son Güncelleme: ${new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}`;
+
+        } catch (error) {
+            container.innerHTML = `<p class="negative" style="text-align:center;">Hata: ${error.message}</p>`;
+            timestampContainer.textContent = 'Veri yüklenemedi.';
+        }
+    }
+
+
     /**
      * Portföy listesindeki tıklamaları yönetir (Olay Delegasyonu).
      */
@@ -485,6 +596,8 @@
     }
     
     function showLiveRankingScreen() {
+        // YENİ: Ana ekranı gizle
+        document.getElementById('my-funds-summary-container').style.display = 'none';
         ['options-container', 'form-container', 'result-area', 'report-container', 'comparison-container'].forEach(id => {
             document.getElementById(id).style.display = 'none';
         });
@@ -678,13 +791,16 @@
             deleteButton.classList.add('active');
             deleteButton.textContent = 'Silme Modundan Çık';
             body.classList.add('delete-mode-active');
+            // YENİ: Ana ekranı gizle
+            document.getElementById('my-funds-summary-container').style.display = 'none';
             ['options-container', 'form-container', 'result-area', 'report-container', 'comparison-container', 'live-ranking-container'].forEach(id => document.getElementById(id).style.display = 'none');
             alert('Silme modu aktif. Silmek istediğiniz fonu listeden seçin.');
         } else {
             deleteButton.classList.remove('active');
             deleteButton.textContent = 'Fonu Sil';
             body.classList.remove('delete-mode-active');
-            showNewPortfolioForm();
+            // GÜNCELLENDİ: showNewPortfolioForm() yerine ana ekrana dön
+            loadMyFundsSummary();
         }
     }
 
@@ -704,9 +820,11 @@
 
         document.getElementById('stocks-container').innerHTML = '';
         document.getElementById('funds-container').innerHTML = '';
+        // YENİ: Ana ekranı gizle
+        document.getElementById('my-funds-summary-container').style.display = 'none';
         ['options-container', 'result-area', 'report-container', 'comparison-container', 'live-ranking-container'].forEach(id => document.getElementById(id).style.display = 'none');
         document.getElementById('form-container').style.display = 'block';
-        document.querySelector('#form-container .back-button').style.display = 'none';
+        document.querySelector('#form-container .back-button').style.display = 'none'; // Formun kendi geri butonu (varsa) gizlensin
         document.getElementById('result-area').style.display = 'none';
     }
     
@@ -729,7 +847,8 @@
                     if (result.success) {
                         alert(result.success);
                         loadPortfolios();
-                        showNewPortfolioForm(); 
+                        // GÜNCELLENDİ: showNewPortfolioForm() yerine ana ekrana dön
+                        loadMyFundsSummary(); 
                     } else {
                         throw new Error(result.error || 'Bilinmeyen bir sunucu hatası (JSON).');
                     }
@@ -913,6 +1032,8 @@
         document.getElementById('btn-edit-portfolio').onclick = () => showPortfolioEditor(name);
         document.getElementById('btn-show-simulation').onclick = () => displayDynamicWeightSimulation(name);
 
+        // YENİ: Ana ekranı gizle
+        document.getElementById('my-funds-summary-container').style.display = 'none';
         ['form-container', 'result-area', 'report-container', 'comparison-container', 'live-ranking-container'].forEach(id => document.getElementById(id).style.display = 'none');
         document.getElementById('options-container').style.display = 'block';
 
@@ -962,11 +1083,15 @@
         const ctx = document.getElementById('portfolioPieChart').getContext('2d');
         if(portfolioChart) { portfolioChart.destroy(); }
         portfolioChart = new Chart(ctx, { type: 'pie', data: { labels: labels, datasets: [{ label: 'Fon Ağırlığı (%)', data: data, backgroundColor: generateDeterministicColors(labels), borderColor: '#fff', borderWidth: 1 }] }, options: { responsive: true, plugins: { legend: { position: 'top' }, tooltip: { callbacks: { label: (context) => `${context.label}: ${context.raw.toFixed(2)}%` } } } } });
+        // YENİ: Ana ekranı gizle
+        document.getElementById('my-funds-summary-container').style.display = 'none';
         document.getElementById('report-container').style.display = 'block';
         ['options-container', 'form-container', 'result-area', 'comparison-container', 'live-ranking-container'].forEach(id => document.getElementById(id).style.display = 'none');
     }
 
     async function displayWeightChangeReport(name) {
+        // YENİ: Ana ekranı gizle
+        document.getElementById('my-funds-summary-container').style.display = 'none';
         ['options-container', 'report-container', 'form-container', 'result-area', 'live-ranking-container'].forEach(id => document.getElementById(id).style.display = 'none');
         const container = document.getElementById('comparison-container');
         const tableContainer = document.getElementById('comparison-table-container');
@@ -1109,7 +1234,9 @@
                 if (response.ok) {
                     alert(result.success);
                     const activeLi = document.querySelector(`#portfolio-list li[data-name="${name}"]`);
-                    showOptions(name, activeLi);
+                    // YENİ: Ana ekrana dönmek yerine seçenekler ekranında kal
+                    loadPortfolios(); // Sol menü güncellensin
+                    displayWeightChangeReport(name); // Tabloyu yenile
                 } else {
                     throw new Error(result.error);
                 }
@@ -1255,6 +1382,8 @@
         fundsContainer.innerHTML = '';
         (portfolio.funds || []).forEach(f => addAsset('fund', f.ticker, f.weight, f.adet));
         
+        // YENİ: Ana ekranı gizle
+        document.getElementById('my-funds-summary-container').style.display = 'none';
         document.getElementById('form-container').style.display = 'block';
         ['options-container', 'result-area', 'report-container', 'comparison-container', 'live-ranking-container'].forEach(id=>document.getElementById(id).style.display='none');
         document.querySelector('#form-container .back-button').style.display = 'block';
@@ -1306,7 +1435,8 @@
         alert(response.ok ? result.success : 'Hata: ' + result.error);
         if (response.ok) {
             loadPortfolios();
-            showNewPortfolioForm(); 
+            // GÜNCELLENDİ: showNewPortfolioForm() yerine ana ekrana dön
+            loadMyFundsSummary(); 
         }
     });
 
@@ -1323,6 +1453,8 @@
     }
 
     function showResultArea(isLoading) {
+        // YENİ: Ana ekranı gizle
+        document.getElementById('my-funds-summary-container').style.display = 'none';
         ['options-container', 'report-container', 'form-container', 'comparison-container', 'live-ranking-container'].forEach(id => document.getElementById(id).style.display = 'none');
         document.getElementById('result-area').style.display = 'block';
         
