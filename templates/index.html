@@ -1248,12 +1248,19 @@
 
         const stocksContainer = document.getElementById('stocks-container');
         stocksContainer.innerHTML = '';
-        // YENİ: s.borsa_tipi parametresi addAsset'e gönderiliyor, 'bist' varsayılan
-        (portfolio.stocks || []).forEach(s => addAsset('stock', s.ticker, s.weight, s.adet, s.borsa_tipi || 'bist'));
+
+        // DEĞİŞİKLİK BURADA: Hisseleri ağırlığa göre büyükten küçüğe sırala
+        const sortedStocks = (portfolio.stocks || []).sort((a, b) => parseFloat(b.weight) - parseFloat(a.weight));
+        // Sıralı listeyi döngüye sok
+        sortedStocks.forEach(s => addAsset('stock', s.ticker, s.weight, s.adet, s.borsa_tipi || 'bist'));
         
         const fundsContainer = document.getElementById('funds-container');
         fundsContainer.innerHTML = '';
-        (portfolio.funds || []).forEach(f => addAsset('fund', f.ticker, f.weight, f.adet));
+        
+        // DEĞİŞİKLİK BURADA: Fonları ağırlığa göre büyükten küçüğe sırala
+        const sortedFunds = (portfolio.funds || []).sort((a, b) => parseFloat(b.weight) - parseFloat(a.weight));
+        // Sıralı listeyi döngüye sok
+        sortedFunds.forEach(f => addAsset('fund', f.ticker, f.weight, f.adet));
         
         document.getElementById('form-container').style.display = 'block';
         ['options-container', 'result-area', 'report-container', 'comparison-container', 'live-ranking-container'].forEach(id=>document.getElementById(id).style.display='none');
