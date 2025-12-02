@@ -1,5 +1,6 @@
-Flask
+flask
 yfinance
+pandas
+supabase
 requests
 gunicorn
-supabase
