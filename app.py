@@ -58,65 +58,109 @@ def save_portfolios(portfolios_dict):
 
 # --- YARDIMCI HESAPLAMA FONKSİYONU ---
 
-# GÜNCELLENDİ: Bu fonksiyon artık 'funds' parametresini alsa da HİÇBİR ŞEKİLDE KULLANMAZ.
-# Tüm TEFAS API çağrıları ve fon döngüsü kaldırıldı.
+# GÜNCELLENDİ: ARTIK HEM STOCKS HEM DE FUNDS HESAPLANIYOR!
 def _calculate_portfolio_return(stocks, funds):
     """
-    Verilen hisse listesi için portföy getirisini hesaplar.
-    'funds' parametresi artık YALNIZCA HİSSE SENETLERİ üzerinden hesaplama yapar.
+    Verilen hisse ve fon listesi için portföy getirisini yfinance kullanarak hesaplar.
     """
-    total_portfolio_change, asset_details = 0.0, []
+    total_portfolio_change = 0.0
+    asset_details = []
     
-    for stock in stocks:
-        ticker, weight = stock.get('ticker', '').strip().upper(), float(stock.get('weight', 0))
+    # Stocks ve Funds listelerini birleştirip tek havuzda işleyelim
+    # Her birine 'asset_type' etiketi ekliyoruz
+    all_assets = []
+    for s in stocks:
+        item = s.copy()
+        item['asset_type'] = 'stock'
+        all_assets.append(item)
+    for f in funds:
+        item = f.copy()
+        item['asset_type'] = 'fund'
+        # Fonların borsa tipi genelde BIST'tir
+        if 'borsa_tipi' not in item: item['borsa_tipi'] = 'bist' 
+        all_assets.append(item)
+
+    for asset in all_assets:
+        ticker = asset.get('ticker', '').strip().upper()
+        try:
+            weight = float(asset.get('weight', 0))
+        except:
+            weight = 0.0
+            
+        asset_type = asset.get('asset_type', 'stock')
+        borsa_tipi = asset.get('borsa_tipi', 'bist')
         
-        # YENİ: Borsa tipini al (varsayılan 'bist')
-        borsa_tipi = stock.get('borsa_tipi', 'bist') 
-        
+        # 1. HATA KONTROLÜ: İsimsiz veya ağırlıksızları atla
         if not ticker or weight == 0: continue
         
-        if ticker in ['NAKIT', 'CASH', 'TAHVIL', 'BOND', 'DEVLET TAHVILI']:
-            asset_details.append({'type': 'stock', 'ticker': ticker.capitalize(), 'daily_change': 0.0, 'weighted_impact': 0.0})
+        # 2. NAKİT KONTROLÜ: Bunların getirisi 0'dır
+        if ticker in ['NAKIT', 'CASH', 'TAHVIL', 'BOND', 'DEVLET TAHVILI', 'TRY', 'TL']:
+            asset_details.append({
+                'type': asset_type, 
+                'ticker': ticker.capitalize(), 
+                'daily_change': 0.0, 
+                'weighted_impact': 0.0
+            })
             continue
             
+        # 3. YAHOO SEMBOLÜNÜ BELİRLE
         if borsa_tipi == 'bist':
             yf_ticker = ticker + '.IS'
-        else: # 'yabanci' ise
+        else: # 'yabanci' ise olduğu gibi kullan
             yf_ticker = ticker
             
         try:
-            # --- YENİ HESAPLAMA YÖNTEMİ ---
+            # 4. VERİ ÇEKME (yfinance ile)
             t = yf.Ticker(yf_ticker)
-            info = t.info
+            
+            # Son 5 günün verisini al (Hafta sonu boşluklarını aşmak için)
+            hist = t.history(period="5d")
+            
+            if len(hist) < 2:
+                # Veri bulunamazsa (Örn: Yeni halka arz veya hatalı kod)
+                asset_details.append({
+                    'type': asset_type, 
+                    'ticker': ticker, 
+                    'daily_change': 0.0, 
+                    'weighted_impact': 0.0, 
+                    'error': 'Veri Yok'
+                })
+                continue
 
-            # 1. Gerçek "Dünkü Kapanış" fiyatını al
-            prev_close = info.get('previousClose')
-            if prev_close is None:
-                hist_2d = t.history(period="2d")
-                if len(hist_2d) < 2:
-                    raise Exception(f"'{ticker}' için 'previousClose' (dünkü kapanış) verisi alınamadı.")
-                prev_close = hist_2d['Close'].iloc[-2]
-                
-            # 2. En "Son Fiyat"ı al (Anlık veya son kapanış)
-            latest_price = info.get('currentPrice', info.get('regularMarketPrice'))
-            if latest_price is None:
-                hist_1d = t.history(period="1d")
-                if hist_1d.empty:
-                    raise Exception(f"'{ticker}' için son fiyat (latest price) alınamadı.")
-                latest_price = hist_1d['Close'].iloc[-1]
+            # Kapanış fiyatlarını al
+            latest_price = hist['Close'].iloc[-1]
+            prev_close = hist['Close'].iloc[-2]
 
-            # 3. Hesaplamayı yap
+            # 5. MATEMATİKSEL HESAPLAMA
+            # Yüzdelik Değişim: (Yeni - Eski) / Eski * 100
             daily_change = ((latest_price - prev_close) / prev_close) * 100
             
-            total_portfolio_change += (weight / 100) * daily_change
-            asset_details.append({'type': 'stock', 'ticker': ticker, 'daily_change': daily_change, 'weighted_impact': (weight / 100) * daily_change})
-            # --- YENİ HESAPLAMA SONU ---
+            # Ağırlıklı Etki: (Ağırlık / 100) * Yüzdelik Değişim
+            weighted_impact = (weight / 100) * daily_change
+            
+            # Toplam portföy getirisine ekle
+            total_portfolio_change += weighted_impact
+            
+            asset_details.append({
+                'type': asset_type, 
+                'ticker': ticker, 
+                'daily_change': daily_change, 
+                'weighted_impact': weighted_impact
+            })
 
         except Exception as e:
-            print(f"Hata (_calculate_portfolio_return, {ticker}): {e}") 
-            asset_details.append({'type': 'stock', 'ticker': ticker, 'daily_change': 0.0, 'weighted_impact': 0.0, 'error': 'Veri alınamadı'})
+            # Herhangi bir hata olursa (İnternet kesintisi vb.) 0 dön
+            print(f"Hata ({ticker}): {e}") 
+            asset_details.append({
+                'type': asset_type, 
+                'ticker': ticker, 
+                'daily_change': 0.0, 
+                'weighted_impact': 0.0, 
+                'error': 'Hata'
+            })
     
-    # --- TEFAS İLE İLGİLİ TÜM BLOK KALDIRILDI ---
+    # Listeyi en çok kazandırandan kaybettirene doğru sırala
+    asset_details.sort(key=lambda x: x.get('weighted_impact', 0), reverse=True)
             
     return {'total_change': total_portfolio_change, 'details': asset_details}
 
@@ -214,12 +258,12 @@ def calculate():
         return jsonify({'error': 'Geçersiz istek. JSON verisi veya Content-Type başlığı eksik.'}), 400
         
     stocks = data.get('stocks', [])
-    funds = data.get('funds', []) # 'funds' alınır ama _calculate_portfolio_return'da kullanılmaz
+    funds = data.get('funds', []) 
     
     if not stocks and not funds: 
         return jsonify({'error': 'Hesaplanacak veri gönderilmedi.'}), 400
     
-    # Bu fonksiyon artık sadece 'stocks' üzerinden hesap yapacak.
+    # GÜNCELLENDİ: Artık hem hisseler hem fonlar fonksiyona gönderiliyor
     result = _calculate_portfolio_return(stocks, funds)
     return jsonify(result)
 
@@ -227,7 +271,6 @@ def calculate():
 def get_all_fund_returns():
     """
     Tüm kayıtlı portföylerin günlük getirilerini hesaplar.
-    GÜNCELLEME: Hesaplama artık SADECE hisse senetleri üzerinden yapılır.
     """
     portfolios = load_portfolios()
     all_returns = []
@@ -238,7 +281,7 @@ def get_all_fund_returns():
             continue
             
         stocks = portfolio_data.get('stocks', [])
-        funds = portfolio_data.get('funds', []) # 'funds' alınır ama hesaplamada kullanılmaz
+        funds = portfolio_data.get('funds', []) 
         
         if not stocks and not funds: # Hissesi olmayan fonlar 0 getiri döner
                all_returns.append({
@@ -247,7 +290,7 @@ def get_all_fund_returns():
                })
                continue
             
-        # _calculate_portfolio_return artık sadece 'stocks'u dikkate alıyor
+        # GÜNCELLENDİ: Artık hem hisseler hem fonlar fonksiyona gönderiliyor
         calculation_result = _calculate_portfolio_return(stocks, funds)
         
         all_returns.append({
