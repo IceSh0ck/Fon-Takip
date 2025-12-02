@@ -1,6 +1,6 @@
 flask
-yfinance
+gunicorn
 pandas
+yfinance
 supabase
 requests
-gunicorn
